@@ -2,6 +2,30 @@
 
 All notable changes to Iris are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versioning follows [SemVer](https://semver.org/).
 
+## [0.3.0] - 2026-04-26
+
+### Added
+- **iOS Safari + Chrome support**: response playback now works on mobile WebKit. Routed through `AudioContext.createBufferSource()` instead of `new Audio()` because WebKit's HTMLAudioElement unlock is per-element — playing a silent clip during a gesture only unlocks that specific element, not subsequent `new Audio()` instances. AudioContext, by contrast, unlocks globally on `resume()`.
+- **Replay button (▶)** next to each Iris turn — taps the audio blob from that turn's playback. Doubles as a fallback when autoplay is blocked, useful for language-learning replay.
+- `unlockAudioPlayback()` is now called on both press AND release of the mic button — iOS 17+ doesn't always count `touchstart` as an activating gesture.
+
+### Changed
+- **Capture format prefers `audio/mp4` over `audio/webm;codecs=opus`** for cross-browser reliability. iOS WebKit reports `audio/webm;codecs=opus` as supported by `MediaRecorder` but `AudioContext.decodeAudioData` then refuses to decode the same bytes (WebKit Bugzilla 226922 / 238546 / 245428). mp4/AAC works in both APIs on every modern browser; Firefox falls through to webm where its own decoder handles it cleanly.
+- **`MediaRecorder.start()` no longer uses a timeslice.** Timeslice produced fragmented mp4 on iOS (moov + multiple moof/mdat fragments meant for streaming transmission) which Scribe rejected as "file corrupted." A single complete file is emitted at stop() instead.
+- **`MediaStream` is held for the page lifetime.** iOS WebKit returns muted/empty streams when re-acquiring the mic too soon after release — only the `MediaRecorder` cycles per turn now.
+- Mic button has `user-select: none`, `-webkit-touch-callout: none`, `-webkit-tap-highlight-color: transparent`, `touch-action: manipulation` so long-press on mobile no longer pops the iOS copy/paste callout.
+
+### Removed
+- **Audio-prefix biasing experiment.** Per research (Whisper prompt-following studies, ElevenLabs Scribe API docs), prepending a known utterance to user audio is not a documented pattern for biasing language detection — and Scribe has no audio-prompt channel. The 2-second prefix was outvoted by the longer user-speech segment in the language-detection logic. Removed: `/api/prefix.mp3` server endpoint, prefix synthesis, prefix stripping from transcripts, browser-side `decodeAudioData` + concat + WAV encode pipeline. Net delete: ~150 lines.
+
+### Fixed
+- iOS Safari "speaking…" forever: `playBlob()` swallowed exceptions silently, so when iOS autoplay rejected, the status never returned to idle. Now uses AudioContext (which doesn't reject) and the surrounding code wraps in try/catch as a defensive belt.
+- iOS Safari second-turn empty recording (5-byte capture): caused by `getUserMedia` returning a muted stream after release/re-acquire. Fixed by holding the MediaStream alive.
+- Scribe "file corrupted" 400s: caused by fragmented mp4 from `MediaRecorder.start(250)`. Fixed by removing the timeslice.
+
+### Notes
+- Language guard now relies on (a) the EN/DE toggle in the UI, and (b) a system-prompt instruction telling Iris to interpret garbled transcripts charitably as imperfect German or English.
+
 ## [0.2.0] - 2026-04-26
 
 ### Added

@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
-import { Recorder, StreamingPlayer, withPrefixAsWav } from './audio'
+import { Recorder, StreamingPlayer, playBlob, unlockAudioPlayback } from './audio'
 
 type Status = 'connecting' | 'idle' | 'listening' | 'thinking' | 'speaking' | 'error'
-type Turn = { role: 'user' | 'assistant'; text: string }
+type Turn = { role: 'user' | 'assistant'; text: string; audio?: Blob }
 type Lang = 'auto' | 'eng' | 'deu'
 
 const LANG_LABEL: Record<Lang, string> = {
@@ -49,8 +49,21 @@ export default function App() {
           const finalText = partialRef.current
           partialRef.current = ''
           setPartial('')
-          if (finalText) setHistory((h) => [...h, { role: 'assistant', text: finalText }])
-          await playerRef.current.playAll()
+          // Snapshot the audio NOW so we can attach it to the turn at the
+          // same moment we append the text — replay button shows up as soon
+          // as the turn renders, even before playback finishes.
+          const audio = playerRef.current.takeBlob()
+          if (finalText) {
+            setHistory((h) => [...h, { role: 'assistant', text: finalText, audio: audio ?? undefined }])
+          }
+          if (audio) {
+            try {
+              await playBlob(audio)
+            } catch {
+              // iOS / Safari may reject autoplay even after unlock —
+              // user can still tap the replay (▶) button on the turn.
+            }
+          }
           setStatus('idle')
         } else if (msg.type === 'error') {
           setError(msg.message)
@@ -69,6 +82,8 @@ export default function App() {
 
   const startTalk = async () => {
     setError(null)
+    // Must be SYNC, before any await — iOS forgets the gesture otherwise
+    unlockAudioPlayback()
     try {
       await recorderRef.current.start()
       setStatus('listening')
@@ -79,19 +94,16 @@ export default function App() {
 
   const stopTalk = async () => {
     if (status !== 'listening') return
+    // iOS 17+ doesn't always count touchstart as activation — re-unlock here
+    // (touchend / mouseup) to be safe; idempotent.
+    unlockAudioPlayback()
     setStatus('thinking')
     const blob = await recorderRef.current.stop()
     if (blob.size === 0) {
       setStatus('idle')
       return
     }
-    try {
-      const wav = await withPrefixAsWav(blob)
-      wsRef.current?.send(await wav.arrayBuffer())
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'audio prep failed')
-      setStatus('idle')
-    }
+    wsRef.current?.send(await blob.arrayBuffer())
   }
 
   const reset = () => {
@@ -140,7 +152,19 @@ export default function App() {
         )}
         {history.map((turn, i) => (
           <div key={i} className={`turn turn-${turn.role}`}>
-            <div className="role">{turn.role === 'user' ? 'You' : 'Iris'}</div>
+            <div className="role">
+              {turn.role === 'user' ? 'You' : 'Iris'}
+              {turn.audio && (
+                <button
+                  className="replay"
+                  onClick={() => playBlob(turn.audio!).catch(() => {})}
+                  title="Play again"
+                  aria-label="Replay audio"
+                >
+                  ▶
+                </button>
+              )}
+            </div>
             <div className="text">{turn.text}</div>
           </div>
         ))}

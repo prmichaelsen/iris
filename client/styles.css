@@ -98,6 +98,31 @@ header h1 {
   letter-spacing: 0.1em;
   color: var(--muted);
   margin-bottom: 0.25rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.replay {
+  width: 1.4rem;
+  height: 1.4rem;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  background: transparent;
+  color: var(--muted);
+  font-size: 0.6rem;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: color 0.15s, border-color 0.15s, background 0.15s;
+}
+
+.replay:hover {
+  color: var(--fg);
+  border-color: var(--fg);
+  background: var(--user-bg);
 }
 
 .text {
@@ -136,6 +161,11 @@ footer {
   cursor: pointer;
   transition: transform 0.1s, background 0.2s;
   font-style: italic;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
 }
 
 .mic:hover:not(:disabled) {

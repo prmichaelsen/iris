@@ -1,6 +1,4 @@
 import http from 'node:http'
-import fs from 'node:fs'
-import path from 'node:path'
 import express from 'express'
 import { WebSocketServer, type WebSocket } from 'ws'
 import Anthropic from '@anthropic-ai/sdk'
@@ -33,58 +31,8 @@ Style guidelines:
 
 The user is speaking through a speech-to-text system that only knows English and German. If a transcript looks garbled, partly nonsensical, or like a different language entirely, assume it is mistranscribed German or English from a learner with imperfect pronunciation. Make your best guess at what they meant given the conversation so far, and respond naturally. If you genuinely cannot guess, ask them to repeat in a friendly way — in the language that fits the conversation.`
 
-const PREFIX_TEXT = 'I speak English. Ich spreche Deutsch.'
-const PREFIX_WORDS = PREFIX_TEXT.split(/\s+/).filter(Boolean).length
-const PREFIX_PATH = path.resolve('./data/prefix.mp3')
-
 const app = express()
 app.get('/healthz', (_req, res) => res.json({ ok: true }))
-
-app.get('/api/prefix.mp3', async (_req, res) => {
-  try {
-    if (!fs.existsSync(PREFIX_PATH)) {
-      console.log('[iris] generating bilingual prefix audio…')
-      fs.mkdirSync(path.dirname(PREFIX_PATH), { recursive: true })
-      const audio = await synthesizePrefix(PREFIX_TEXT)
-      fs.writeFileSync(PREFIX_PATH, audio)
-      console.log(`[iris] cached ${PREFIX_PATH} (${audio.length} bytes)`)
-    }
-    res.setHeader('Content-Type', 'audio/mpeg')
-    res.setHeader('Cache-Control', 'public, max-age=86400')
-    res.sendFile(PREFIX_PATH)
-  } catch (err) {
-    console.error('[iris] prefix generation failed:', err)
-    res.status(500).json({ error: err instanceof Error ? err.message : String(err) })
-  }
-})
-
-async function synthesizePrefix(text: string): Promise<Buffer> {
-  if (!ELEVEN_KEY) throw new Error('ELEVENLABS_API_KEY not set')
-  const url = `${ELEVEN_API}/text-to-speech/${VOICE_ID}?output_format=mp3_44100_128`
-  const res = await fetchWithRetry(url, () => ({
-    method: 'POST',
-    headers: {
-      'xi-api-key': ELEVEN_KEY!,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      text,
-      model_id: 'eleven_multilingual_v2',
-      voice_settings: { stability: 0.7, similarity_boost: 0.75 },
-    }),
-  }))
-  if (!res.ok) {
-    const body = await res.text().catch(() => '')
-    throw new Error(`Prefix TTS ${res.status}: ${body.slice(0, 200)}`)
-  }
-  return Buffer.from(await res.arrayBuffer())
-}
-
-function stripPrefix(transcript: string): string {
-  const words = transcript.trim().split(/\s+/)
-  if (words.length <= PREFIX_WORDS) return ''
-  return words.slice(PREFIX_WORDS).join(' ')
-}
 
 const server = http.createServer(app)
 const wss = new WebSocketServer({ server, path: '/api/voice' })
@@ -109,8 +57,7 @@ wss.on('connection', (ws) => {
     try {
       const audio = data as Buffer
 
-      const rawTranscript = await transcribe(audio, nextLanguage)
-      const transcript = stripPrefix(rawTranscript)
+      const transcript = await transcribe(audio, nextLanguage)
       if (!transcript.trim()) {
         send(ws, { type: 'error', message: 'No speech detected' })
         send(ws, { type: 'done' })
@@ -164,9 +111,9 @@ async function transcribe(buf: Buffer, language?: string): Promise<string> {
   if (!ELEVEN_KEY) throw new Error('ELEVENLABS_API_KEY not set')
   const res = await fetchWithRetry(`${ELEVEN_API}/speech-to-text`, () => {
     const form = new FormData()
-    // Audio arrives from the client as WAV (browser-side concat with the
-    // bilingual prefix). Sending raw bytes; Scribe sniffs the format.
-    form.append('file', new Blob([new Uint8Array(buf)], { type: 'audio/wav' }), 'audio.wav')
+    // Audio arrives as whatever MediaRecorder produced (audio/mp4 on Safari,
+    // audio/webm;codecs=opus on Chrome/Firefox). Scribe sniffs the format.
+    form.append('file', new Blob([new Uint8Array(buf)], { type: 'application/octet-stream' }), 'audio')
     form.append('model_id', 'scribe_v1')
     if (language) form.append('language_code', language)
     return {
