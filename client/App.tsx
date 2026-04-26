@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { Virtuoso, type VirtuosoHandle } from 'react-virtuoso'
 import { Recorder, StreamingPlayer, playBlob, unlockAudioPlayback } from './audio'
 import type { AuthUser } from './AuthGate'
 import LanguagePicker from './LanguagePicker'
@@ -24,6 +25,18 @@ export default function App({ user, signOut }: AppProps) {
   const playerRef = useRef(new StreamingPlayer())
   const partialRef = useRef('')
 
+  // Virtualized chat list. `atBottom` gates whether streaming/new messages
+  // pull the viewport down — if the user scrolled up to read older turns
+  // they don't get yanked back.
+  const virtuosoRef = useRef<VirtuosoHandle>(null)
+  const [atBottom, setAtBottom] = useState(true)
+
+  const scrollToBottom = useCallback(() => {
+    requestAnimationFrame(() => {
+      virtuosoRef.current?.scrollToIndex({ index: 'LAST', align: 'end', behavior: 'smooth' })
+    })
+  }, [])
+
   useEffect(() => {
     let active = true
     let attempts = 0
@@ -40,6 +53,8 @@ export default function App({ user, signOut }: AppProps) {
               text: t.text,
             })),
           )
+          // History is the user's own — pin to bottom unconditionally.
+          scrollToBottom()
         } else if (msg.type === 'transcript') {
           setHistory((h) => [...h, { role: 'user', text: msg.text }])
           setStatus('thinking')
@@ -150,6 +165,30 @@ export default function App({ user, signOut }: AppProps) {
     wsRef.current?.send(await blob.arrayBuffer())
   }
 
+  // Display items: persisted turns plus the in-flight assistant partial as a
+  // synthetic last item. When `partial` arrives, item count grows by 1 once;
+  // followOutput handles that. Subsequent token deltas grow the same item's
+  // content — the count is stable, so we manually scroll below.
+  type DisplayItem =
+    | { type: 'turn'; turn: Turn; key: string }
+    | { type: 'partial'; text: string }
+
+  const displayItems = useMemo<DisplayItem[]>(() => {
+    const items: DisplayItem[] = history.map((turn, i) => ({
+      type: 'turn',
+      turn,
+      key: `t:${i}`,
+    }))
+    if (partial) items.push({ type: 'partial', text: partial })
+    return items
+  }, [history, partial])
+
+  useEffect(() => {
+    if (!atBottom) return
+    if (!partial) return
+    virtuosoRef.current?.scrollToIndex({ index: 'LAST', align: 'end', behavior: 'auto' })
+  }, [partial, atBottom])
+
   const reset = () => {
     setHistory([])
     partialRef.current = ''
@@ -203,35 +242,51 @@ export default function App({ user, signOut }: AppProps) {
         </div>
       </header>
 
-      <section className="transcript">
-        {history.length === 0 && status === 'idle' && (
+      {displayItems.length === 0 && status === 'idle' ? (
+        <section className="transcript transcript-empty">
           <p className="hint">Hold the button (or Space) and say something. Try mixing German and English.</p>
-        )}
-        {history.map((turn, i) => (
-          <div key={i} className={`turn turn-${turn.role}`}>
-            <div className="role">
-              {turn.role === 'user' ? 'You' : 'Iris'}
-              {turn.audio && (
-                <button
-                  className="replay"
-                  onClick={() => playBlob(turn.audio!).catch(() => {})}
-                  title="Play again"
-                  aria-label="Replay audio"
-                >
-                  ▶
-                </button>
-              )}
-            </div>
-            <div className="text">{turn.text}</div>
-          </div>
-        ))}
-        {partial && (
-          <div className="turn turn-assistant">
-            <div className="role">Iris</div>
-            <div className="text">{partial}</div>
-          </div>
-        )}
-      </section>
+        </section>
+      ) : (
+        <Virtuoso
+          ref={virtuosoRef}
+          className="transcript"
+          data={displayItems}
+          initialTopMostItemIndex={Math.max(displayItems.length - 1, 0)}
+          atBottomStateChange={setAtBottom}
+          atBottomThreshold={48}
+          followOutput={(isAtBottom) => (isAtBottom ? 'auto' : false)}
+          computeItemKey={(_index, item) => (item.type === 'turn' ? item.key : '__partial__')}
+          itemContent={(_index, item) => {
+            if (item.type === 'partial') {
+              return (
+                <div className="turn turn-assistant">
+                  <div className="role">Iris</div>
+                  <div className="text">{item.text}</div>
+                </div>
+              )
+            }
+            const turn = item.turn
+            return (
+              <div className={`turn turn-${turn.role}`}>
+                <div className="role">
+                  {turn.role === 'user' ? 'You' : 'Iris'}
+                  {turn.audio && (
+                    <button
+                      className="replay"
+                      onClick={() => playBlob(turn.audio!).catch(() => {})}
+                      title="Play again"
+                      aria-label="Replay audio"
+                    >
+                      ▶
+                    </button>
+                  )}
+                </div>
+                <div className="text">{turn.text}</div>
+              </div>
+            )
+          }}
+        />
+      )}
 
       {error && <div className="error">{error}</div>}
 

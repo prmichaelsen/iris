@@ -2,6 +2,20 @@
 
 All notable changes to Iris are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versioning follows [SemVer](https://semver.org/).
 
+## [0.5.1] - 2026-04-26
+
+### Changed
+- **Virtualized chat list with `react-virtuoso`** (pattern adapted from scenecraft's `ChatPanel.tsx`). The `<section className="transcript">` flex column is replaced with `<Virtuoso>` so only the visible viewport (plus a small overscan) is mounted as DOM — long conversation histories scroll smoothly.
+- **Smart auto-scroll** that doesn't yank the user back when they've scrolled up to read older messages:
+  - `atBottomStateChange` + `atBottomThreshold={48}` (48px) tracks "near enough to the bottom" — generous enough that streaming text growing the layout doesn't flip the state
+  - `followOutput((isAtBottom) => isAtBottom ? 'auto' : false)` handles new turn appended (item count change)
+  - A `useEffect` on `[partial, atBottom]` calls `scrollToIndex({ index: 'LAST', align: 'end' })` while the in-flight assistant text grows the same item (followOutput doesn't fire for content growth, only count changes)
+  - Unconditional `scrollToBottom()` on initial history load — user just opened the app, they want their most recent
+- CSS: turn spacing moved from flex `gap` to per-turn `margin-bottom`, alignment from `align-self` to `margin-left/right: auto`. Visual result is identical.
+
+### Notes
+- Bundle size: +20KB gzipped (`react-virtuoso` and its deps). Acceptable for the virtualization win once histories grow.
+
 ## [0.5.0] - 2026-04-26
 
 ### Added

@@ -60,12 +60,19 @@ header h1 {
 
 .transcript {
   flex: 1;
-  display: flex;
-  flex-direction: column;
-  gap: 0.75rem;
-  overflow-y: auto;
+  min-height: 0;
   padding: 1rem 0;
   max-height: 60vh;
+}
+
+/* Virtuoso requires a positioned parent with explicit height. The default
+ * className above sets flex sizing; Virtuoso fills it. Each turn renders
+ * inside its own item wrapper, so spacing comes from per-item margin. */
+
+.transcript-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .hint {
@@ -80,15 +87,17 @@ header h1 {
   border-radius: 0.5rem;
   border: 1px solid var(--border);
   max-width: 85%;
+  /* Virtuoso wraps items individually — no flex gap */
+  margin-bottom: 0.75rem;
 }
 
 .turn-user {
-  align-self: flex-end;
+  margin-left: auto;
   background: var(--user-bg);
 }
 
 .turn-assistant {
-  align-self: flex-start;
+  margin-right: auto;
   background: var(--assistant-bg);
 }
 
