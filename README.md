@@ -23,15 +23,37 @@ Named for **Iris**, the Greek messenger goddess who carried words between worlds
 
 ```bash
 cd ~/.acp/projects/iris
-# (scaffold from acp-tanstack-cloudflare package, see agent/files/src/)
+npm install
+npm run dev
+# open http://localhost:5173
 ```
 
-API keys needed in `.env.local`:
+Hold the button (or hold Space) to talk. Release to send. Try mixing German and English.
+
+API keys go in `.env.local`:
 
 ```
 ANTHROPIC_API_KEY=...
 ELEVENLABS_API_KEY=...
+ELEVENLABS_VOICE_ID=pNInz6obpgDQGcFmaJgB   # optional — Adam (multilingual)
 ```
+
+## Architecture (POC)
+
+```
+Browser (React + Vite)
+   │  hold-to-talk → MediaRecorder → audio/webm Blob
+   │  WebSocket /api/voice  ↓
+   ▼
+Node server (Express + ws)
+   │  → ElevenLabs Scribe (STT)            text
+   │  → Claude Opus 4.7 (streaming)        text deltas → client live transcript
+   │  → ElevenLabs TTS (HTTP streaming)    mp3 chunks → client audio queue
+   ▼
+Browser plays mp3 once stream completes
+```
+
+Single Claude session with a bilingual system prompt. ElevenLabs `eleven_multilingual_v2` handles German + English natively in one synthesis call. STT is push-to-talk (whole utterance), not real-time.
 
 ## Development with ACP
 

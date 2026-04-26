@@ -1,0 +1,157 @@
+import { useEffect, useRef, useState } from 'react'
+import { Recorder, StreamingPlayer } from './audio'
+
+type Status = 'connecting' | 'idle' | 'listening' | 'thinking' | 'speaking' | 'error'
+type Turn = { role: 'user' | 'assistant'; text: string }
+
+export default function App() {
+  const [status, setStatus] = useState<Status>('connecting')
+  const [history, setHistory] = useState<Turn[]>([])
+  const [partial, setPartial] = useState('')
+  const [error, setError] = useState<string | null>(null)
+
+  const wsRef = useRef<WebSocket | null>(null)
+  const recorderRef = useRef(new Recorder())
+  const playerRef = useRef(new StreamingPlayer())
+  const partialRef = useRef('')
+
+  useEffect(() => {
+    const proto = location.protocol === 'https:' ? 'wss:' : 'ws:'
+    const ws = new WebSocket(`${proto}//${location.host}/api/voice`)
+    ws.binaryType = 'arraybuffer'
+    wsRef.current = ws
+
+    ws.onopen = () => setStatus('idle')
+    ws.onclose = () => setStatus('error')
+    ws.onerror = () => setError('WebSocket connection failed')
+
+    ws.onmessage = async (e) => {
+      if (typeof e.data === 'string') {
+        const msg = JSON.parse(e.data)
+        if (msg.type === 'transcript') {
+          setHistory((h) => [...h, { role: 'user', text: msg.text }])
+          setStatus('thinking')
+        } else if (msg.type === 'response_text') {
+          partialRef.current += msg.delta
+          setPartial(partialRef.current)
+          if (status !== 'speaking') setStatus('speaking')
+        } else if (msg.type === 'done') {
+          const finalText = partialRef.current
+          partialRef.current = ''
+          setPartial('')
+          if (finalText) setHistory((h) => [...h, { role: 'assistant', text: finalText }])
+          await playerRef.current.playAll()
+          setStatus('idle')
+        } else if (msg.type === 'error') {
+          setError(msg.message)
+          setStatus('idle')
+        }
+      } else {
+        playerRef.current.push(e.data as ArrayBuffer)
+      }
+    }
+
+    return () => ws.close()
+  }, [])
+
+  const startTalk = async () => {
+    setError(null)
+    try {
+      await recorderRef.current.start()
+      setStatus('listening')
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Mic access denied')
+    }
+  }
+
+  const stopTalk = async () => {
+    if (status !== 'listening') return
+    setStatus('thinking')
+    const blob = await recorderRef.current.stop()
+    if (blob.size === 0) {
+      setStatus('idle')
+      return
+    }
+    const buf = await blob.arrayBuffer()
+    wsRef.current?.send(buf)
+  }
+
+  const reset = () => {
+    setHistory([])
+    partialRef.current = ''
+    setPartial('')
+    wsRef.current?.send(JSON.stringify({ type: 'reset' }))
+  }
+
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.code === 'Space' && !e.repeat && status === 'idle') {
+        e.preventDefault()
+        startTalk()
+      }
+    }
+    const onKeyUp = (e: KeyboardEvent) => {
+      if (e.code === 'Space' && status === 'listening') {
+        e.preventDefault()
+        stopTalk()
+      }
+    }
+    window.addEventListener('keydown', onKeyDown)
+    window.addEventListener('keyup', onKeyUp)
+    return () => {
+      window.removeEventListener('keydown', onKeyDown)
+      window.removeEventListener('keyup', onKeyUp)
+    }
+  }, [status])
+
+  return (
+    <main className="app">
+      <header>
+        <h1>Iris</h1>
+        <p className="subtitle">Bilingual voice chat — German & English</p>
+      </header>
+
+      <section className="transcript">
+        {history.length === 0 && status === 'idle' && (
+          <p className="hint">Hold the button (or Space) and say something. Try mixing German and English.</p>
+        )}
+        {history.map((turn, i) => (
+          <div key={i} className={`turn turn-${turn.role}`}>
+            <div className="role">{turn.role === 'user' ? 'You' : 'Iris'}</div>
+            <div className="text">{turn.text}</div>
+          </div>
+        ))}
+        {partial && (
+          <div className="turn turn-assistant">
+            <div className="role">Iris</div>
+            <div className="text">{partial}</div>
+          </div>
+        )}
+      </section>
+
+      {error && <div className="error">{error}</div>}
+
+      <footer>
+        <button
+          className={`mic mic-${status}`}
+          onMouseDown={startTalk}
+          onMouseUp={stopTalk}
+          onMouseLeave={() => status === 'listening' && stopTalk()}
+          onTouchStart={startTalk}
+          onTouchEnd={stopTalk}
+          disabled={status !== 'idle' && status !== 'listening'}
+        >
+          {status === 'connecting' && 'connecting…'}
+          {status === 'idle' && 'hold to talk'}
+          {status === 'listening' && 'listening…'}
+          {status === 'thinking' && 'thinking…'}
+          {status === 'speaking' && 'speaking…'}
+          {status === 'error' && 'disconnected'}
+        </button>
+        <button className="reset" onClick={reset} disabled={history.length === 0}>
+          new chat
+        </button>
+      </footer>
+    </main>
+  )
+}
