@@ -1,0 +1,39 @@
+project:
+  name: iris
+  version: 0.1.0
+  started: 2026-04-26
+  status: in_progress
+  description: |
+    Bilingual voice chat for language learning. Real-time streaming voice
+    conversation in two languages at once (initial: German + English),
+    powered by Claude Sonnet 4.6 + ElevenLabs multilingual TTS over a
+    Cloudflare Durable Object WebSocket relay.
+
+milestones: []
+
+tasks: {}
+
+documentation:
+  design_documents: 0
+  milestone_documents: 0
+  pattern_documents: 0
+  task_documents: 0
+
+progress:
+  planning: 0
+  implementation: 0
+  overall: 0
+
+recent_work: []
+
+next_steps:
+  - Install acp-tanstack-cloudflare package for patterns + starter scaffold
+  - Define hackathon requirements in agent/design/requirements.md
+  - Plan milestones with @acp.plan (audio capture, WS relay, Claude stream, TTS playback)
+  - Set ANTHROPIC_API_KEY and ELEVENLABS_API_KEY in .env.local
+
+notes:
+  - POC scope - single-stream architecture (one Claude session, multilingual prompt)
+  - Defer dual-Claude routing experiment until single-stream limits are observed
+
+current_blockers: []
