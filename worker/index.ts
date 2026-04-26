@@ -26,18 +26,30 @@ const ELEVEN_API = 'https://api.elevenlabs.io/v1'
 const MODEL = 'claude-opus-4-7'
 const DEFAULT_VOICE_ID = 'XB0fDUnXU5powFXDhCwa'
 
-const SYSTEM_PROMPT = `You are Iris, a warm and patient bilingual conversation partner who is fluent in German and English. You help people practice both languages through natural conversation.
+const BASE_PROMPT = `You are Iris, a warm and patient language tutor. The user's native language is English; you should treat English as their fallback for explanations.
 
 Style guidelines:
 - This is voice chat. Keep replies short — 1 to 3 sentences. Conversational, not lecture-like.
-- Mirror the user's language mix. If they speak German, reply in German. If they speak English, reply in English. If they code-switch, code-switch back.
-- When the user is clearly the learner, gently weave in target-language vocabulary or phrasing — don't overload, one or two new words per turn.
-- If they make a small mistake, you can gently model the correct phrasing in your reply without explicitly correcting them, unless they ask for correction.
-- Occasionally ask a follow-up question to keep the conversation flowing.
+- Gently model correct phrasing when the user makes a small mistake, instead of explicitly correcting them — unless they ask to be corrected.
+- Occasionally ask a follow-up question to keep practice flowing.
 - Never break character to mention you are an AI or a language model. You are Iris.
-- Use plain text only. No markdown, no emoji, no asterisks for emphasis — your output is read aloud.
+- Use plain text only. No markdown, no emoji, no asterisks for emphasis — your output is read aloud.`
 
-The user is speaking through a speech-to-text system that only knows English and German. If a transcript looks garbled, partly nonsensical, or like a different language entirely, assume it is mistranscribed German or English from a learner with imperfect pronunciation. Make your best guess at what they meant given the conversation so far, and respond naturally. If you genuinely cannot guess, ask them to repeat in a friendly way — in the language that fits the conversation.`
+const NO_TARGET_PROMPT = `The user has not picked a target language yet. Greet them in English and ask which language they would like to practice. Until they pick one, keep the conversation in English.`
+
+function targetPrompt(nativeName: string, englishName: string): string {
+  return `The user is learning ${nativeName} (${englishName}).
+- Speak ${nativeName} with them by default. Match the user's level — if their ${nativeName} is shaky, slow down and simplify; if it's strong, push them with richer vocabulary or new phrasing.
+- Drop into English (1) when the user asks something in English, (2) when they appear stuck or confused, or (3) to briefly explain a word, idiom, or grammar point. After explaining, return to ${nativeName} on the next turn.
+- Each reply, when natural, gently introduce one new ${nativeName} word or phrase the user can pick up — don't lecture, just weave it in.
+- If the transcript looks garbled, assume the user was attempting ${nativeName} with imperfect pronunciation and make your best guess from context.`
+}
+
+function buildSystemPrompt(targetLang: { code: string; name: string; english: string } | null): string {
+  return targetLang
+    ? `${BASE_PROMPT}\n\n${targetPrompt(targetLang.name, targetLang.english)}`
+    : `${BASE_PROMPT}\n\n${NO_TARGET_PROMPT}`
+}
 
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
@@ -100,7 +112,7 @@ async function handleSignup(request: Request, env: Env): Promise<Response> {
     .bind(userId, email, passwordHash, nowSec())
     .run()
   const token = await createSession(env.DB, userId)
-  return new Response(JSON.stringify({ user: { id: userId, email } }), {
+  return new Response(JSON.stringify({ user: { id: userId, email, targetLang: null } }), {
     status: 201,
     headers: {
       'Content-Type': 'application/json',
@@ -121,15 +133,25 @@ async function handleLogin(request: Request, env: Env): Promise<Response> {
   if (!email || !password) return jsonError('Email and password required', 400)
 
   const user = await env.DB
-    .prepare('SELECT id, email, password_hash FROM users WHERE email = ?')
+    .prepare('SELECT id, email, password_hash, target_lang_code, target_lang_name, target_lang_english FROM users WHERE email = ?')
     .bind(email)
-    .first<{ id: string; email: string; password_hash: string }>()
+    .first<{
+      id: string
+      email: string
+      password_hash: string
+      target_lang_code: string | null
+      target_lang_name: string | null
+      target_lang_english: string | null
+    }>()
   if (!user) return jsonError('Invalid email or password', 401)
   const ok = await verifyPassword(password, user.password_hash)
   if (!ok) return jsonError('Invalid email or password', 401)
 
+  const targetLang = user.target_lang_code && user.target_lang_name && user.target_lang_english
+    ? { code: user.target_lang_code, name: user.target_lang_name, english: user.target_lang_english }
+    : null
   const token = await createSession(env.DB, user.id)
-  return new Response(JSON.stringify({ user: { id: user.id, email: user.email } }), {
+  return new Response(JSON.stringify({ user: { id: user.id, email: user.email, targetLang } }), {
     status: 200,
     headers: {
       'Content-Type': 'application/json',
@@ -156,7 +178,16 @@ async function handleMe(request: Request, env: Env): Promise<Response> {
     status: 200,
     headers: { 'Content-Type': 'application/json' },
   })
-  return Response.json({ user: { id: session.user.id, email: session.user.email } })
+  const target = await env.DB
+    .prepare('SELECT target_lang_code AS code, target_lang_name AS name, target_lang_english AS english FROM users WHERE id = ?')
+    .bind(session.user.id)
+    .first<{ code: string | null; name: string | null; english: string | null }>()
+  const targetLang = target && target.code && target.name && target.english
+    ? { code: target.code, name: target.name, english: target.english }
+    : null
+  return Response.json({
+    user: { id: session.user.id, email: session.user.email, targetLang },
+  })
 }
 
 function jsonError(message: string, status: number): Response {
@@ -185,7 +216,17 @@ async function handleWebSocket(request: Request, env: Env): Promise<Response> {
   console.log(`[iris] client connected (user=${session.user.email})`)
 
   const anthropic = new Anthropic({ apiKey: env.ANTHROPIC_API_KEY })
-  let nextLanguage: string | undefined
+
+  // Load the user's saved target language (set last time they picked one).
+  const savedLang = await env.DB
+    .prepare('SELECT target_lang_code AS code, target_lang_name AS name, target_lang_english AS english FROM users WHERE id = ?')
+    .bind(userId)
+    .first<{ code: string | null; name: string | null; english: string | null }>()
+  let targetLang: { code: string; name: string; english: string } | null =
+    savedLang && savedLang.code && savedLang.name && savedLang.english
+      ? { code: savedLang.code, name: savedLang.name, english: savedLang.english }
+      : null
+  let nextLanguage: string | undefined = targetLang?.code
 
   // Find or create the user's active conversation, then load history from D1.
   const conversationId = await getOrCreateActiveConversation(env.DB, userId)
@@ -226,7 +267,21 @@ async function handleWebSocket(request: Request, env: Env): Promise<Response> {
             .bind(conversationId)
             .run()
         } else if (msg.type === 'language') {
-          nextLanguage = msg.code === 'auto' ? undefined : msg.code
+          if (msg.code === 'auto' || !msg.code) {
+            nextLanguage = undefined
+            targetLang = null
+            await env.DB
+              .prepare('UPDATE users SET target_lang_code = NULL, target_lang_name = NULL, target_lang_english = NULL WHERE id = ?')
+              .bind(userId)
+              .run()
+          } else if (typeof msg.code === 'string' && typeof msg.name === 'string' && typeof msg.english === 'string') {
+            nextLanguage = msg.code
+            targetLang = { code: msg.code, name: msg.name, english: msg.english }
+            await env.DB
+              .prepare('UPDATE users SET target_lang_code = ?, target_lang_name = ?, target_lang_english = ? WHERE id = ?')
+              .bind(msg.code, msg.name, msg.english, userId)
+              .run()
+          }
         }
       } catch {}
       return
@@ -261,7 +316,7 @@ async function handleWebSocket(request: Request, env: Env): Promise<Response> {
       const stream = anthropic.messages.stream({
         model: MODEL,
         max_tokens: 512,
-        system: SYSTEM_PROMPT,
+        system: buildSystemPrompt(targetLang),
         messages: history,
       })
 

@@ -2,6 +2,22 @@
 
 All notable changes to Iris are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versioning follows [SemVer](https://semver.org/).
 
+## [0.5.0] - 2026-04-26
+
+### Added
+- **Tutor mode**: Iris is no longer a generic polyglot — she's a language tutor with **English as the user's L1**. When a target language is picked, she speaks the target by default, drops into English to explain words/grammar/clarification, and weaves one new vocabulary word per reply.
+- **Typeahead language picker** (`LanguagePicker.tsx`) replacing the 3-button toggle. 53 curated languages with native + English names; fuzzy match on either, ordered by exact → prefix → substring. Keyboard nav (↑/↓/Enter/Esc) and click-select.
+- **Per-user persisted target language** in D1 (migration `0002_user_target_lang.sql` adds `target_lang_code/name/english` columns to `users`). Worker writes on every language pick, reads on `/api/auth/me`, login, and WS connect — picker initializes to the saved value across sessions and devices.
+- **WebSocket auto-reconnect** with capped exponential backoff (1s → 2s → 4s → 8s → 16s → 30s, jittered). New `reconnecting…` status appears on the mic button while a retry is pending. Cleanup on unmount detaches handlers so close events don't trigger phantom reconnects.
+
+### Changed
+- WebSocket `language` message now carries `{ code, name, english }` instead of just `code`. The worker uses native + English names directly in the system prompt without needing a server-side language lookup.
+- Picker dropdown opens **upward** (`bottom: 100%`) so it doesn't get clipped by the viewport bottom on mobile.
+- Trigger button stays in place when the picker opens — previous "swap button↔input" approach caused a vertical layout shift.
+
+### Notes
+- Non-English-speaking users will get an English-anchored experience for now. Adding a second picker for L1 is straightforward when needed.
+
 ## [0.4.0] - 2026-04-26
 
 ### Added

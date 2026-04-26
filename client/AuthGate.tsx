@@ -1,6 +1,10 @@
 import { useEffect, useState, type FormEvent } from 'react'
 
-export type AuthUser = { id: string; email: string }
+export type AuthUser = {
+  id: string
+  email: string
+  targetLang?: { code: string; name: string; english: string } | null
+}
 
 interface Props {
   children: (user: AuthUser, signOut: () => Promise<void>) => React.ReactNode

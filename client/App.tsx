@@ -1,16 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
 import { Recorder, StreamingPlayer, playBlob, unlockAudioPlayback } from './audio'
 import type { AuthUser } from './AuthGate'
+import LanguagePicker from './LanguagePicker'
+import { findLanguage } from './languages'
 
-type Status = 'connecting' | 'idle' | 'listening' | 'thinking' | 'speaking' | 'error'
+type Status = 'connecting' | 'reconnecting' | 'idle' | 'listening' | 'thinking' | 'speaking' | 'error'
 type Turn = { role: 'user' | 'assistant'; text: string; audio?: Blob }
-type Lang = 'auto' | 'eng' | 'deu'
-
-const LANG_LABEL: Record<Lang, string> = {
-  auto: 'auto',
-  eng: 'english',
-  deu: 'deutsch',
-}
 
 interface AppProps {
   user: AuthUser
@@ -22,7 +17,7 @@ export default function App({ user, signOut }: AppProps) {
   const [history, setHistory] = useState<Turn[]>([])
   const [partial, setPartial] = useState('')
   const [error, setError] = useState<string | null>(null)
-  const [lang, setLang] = useState<Lang>('auto')
+  const [lang, setLang] = useState<string>(user.targetLang?.code ?? 'auto')
 
   const wsRef = useRef<WebSocket | null>(null)
   const recorderRef = useRef(new Recorder())
@@ -31,16 +26,10 @@ export default function App({ user, signOut }: AppProps) {
 
   useEffect(() => {
     let active = true
-    const proto = location.protocol === 'https:' ? 'wss:' : 'ws:'
-    const ws = new WebSocket(`${proto}//${location.host}/api/voice`)
-    ws.binaryType = 'arraybuffer'
-    wsRef.current = ws
+    let attempts = 0
+    let reconnectTimer: number | null = null
 
-    ws.onopen = () => active && setStatus('idle')
-    ws.onclose = () => active && setStatus('error')
-    ws.onerror = () => active && setError('WebSocket connection failed')
-
-    ws.onmessage = async (e) => {
+    const onMessage = async (e: MessageEvent) => {
       if (!active) return
       if (typeof e.data === 'string') {
         const msg = JSON.parse(e.data)
@@ -62,9 +51,6 @@ export default function App({ user, signOut }: AppProps) {
           const finalText = partialRef.current
           partialRef.current = ''
           setPartial('')
-          // Snapshot the audio NOW so we can attach it to the turn at the
-          // same moment we append the text — replay button shows up as soon
-          // as the turn renders, even before playback finishes.
           const audio = playerRef.current.takeBlob()
           if (finalText) {
             setHistory((h) => [...h, { role: 'assistant', text: finalText, audio: audio ?? undefined }])
@@ -73,8 +59,7 @@ export default function App({ user, signOut }: AppProps) {
             try {
               await playBlob(audio)
             } catch {
-              // iOS / Safari may reject autoplay even after unlock —
-              // user can still tap the replay (▶) button on the turn.
+              // iOS may reject autoplay; ▶ button still works
             }
           }
           setStatus('idle')
@@ -87,9 +72,55 @@ export default function App({ user, signOut }: AppProps) {
       }
     }
 
+    const connect = () => {
+      if (!active) return
+      const proto = location.protocol === 'https:' ? 'wss:' : 'ws:'
+      const ws = new WebSocket(`${proto}//${location.host}/api/voice`)
+      ws.binaryType = 'arraybuffer'
+      wsRef.current = ws
+      setStatus(attempts === 0 ? 'connecting' : 'reconnecting')
+
+      ws.onopen = () => {
+        if (!active) return
+        attempts = 0
+        setError(null)
+        setStatus('idle')
+        // Mid-turn state from before the drop is gone — reset partial buffer.
+        // Server will replay history via the 'history' message.
+        partialRef.current = ''
+        setPartial('')
+      }
+
+      ws.onmessage = onMessage
+
+      // onerror is always followed by onclose; do reconnect logic in onclose.
+      ws.onerror = () => {}
+
+      ws.onclose = () => {
+        if (!active) return
+        wsRef.current = null
+        // Cap exponential backoff at 30s, jitter up to 250ms
+        const backoff = Math.min(1000 * 2 ** Math.min(attempts, 5), 30000)
+        const delay = backoff + Math.floor(Math.random() * 250)
+        attempts++
+        setStatus('reconnecting')
+        reconnectTimer = window.setTimeout(connect, delay)
+      }
+    }
+
+    connect()
+
     return () => {
       active = false
-      ws.close()
+      if (reconnectTimer != null) clearTimeout(reconnectTimer)
+      const ws = wsRef.current
+      wsRef.current = null
+      // Mark closed before invoking close() so onclose handler short-circuits
+      if (ws) {
+        ws.onclose = null
+        ws.onerror = null
+        ws.close()
+      }
     }
   }, [])
 
@@ -126,9 +157,18 @@ export default function App({ user, signOut }: AppProps) {
     wsRef.current?.send(JSON.stringify({ type: 'reset' }))
   }
 
-  const setLanguage = (next: Lang) => {
+  const setLanguage = (next: string) => {
     setLang(next)
-    wsRef.current?.send(JSON.stringify({ type: 'language', code: next }))
+    if (next === 'auto') {
+      wsRef.current?.send(JSON.stringify({ type: 'language', code: 'auto' }))
+    } else {
+      const meta = findLanguage(next)
+      if (meta) {
+        wsRef.current?.send(
+          JSON.stringify({ type: 'language', code: meta.code, name: meta.name, english: meta.english }),
+        )
+      }
+    }
   }
 
   useEffect(() => {
@@ -195,21 +235,9 @@ export default function App({ user, signOut }: AppProps) {
 
       {error && <div className="error">{error}</div>}
 
-      <div className="lang-toggle">
-        {(['auto', 'eng', 'deu'] as const).map((opt) => (
-          <button
-            key={opt}
-            className={`lang-btn ${lang === opt ? 'lang-btn-active' : ''}`}
-            onClick={() => setLanguage(opt)}
-            title={
-              opt === 'auto'
-                ? 'Let Scribe detect the language (may pick Dutch on bad German)'
-                : `Force input language to ${LANG_LABEL[opt]}`
-            }
-          >
-            {LANG_LABEL[opt]}
-          </button>
-        ))}
+      <div className="lang-bar">
+        <span className="lang-bar-label">learning</span>
+        <LanguagePicker value={lang} onChange={setLanguage} />
       </div>
 
       <footer>
@@ -223,6 +251,7 @@ export default function App({ user, signOut }: AppProps) {
           disabled={status !== 'idle' && status !== 'listening'}
         >
           {status === 'connecting' && 'connecting…'}
+          {status === 'reconnecting' && 'reconnecting…'}
           {status === 'idle' && 'hold to talk'}
           {status === 'listening' && 'listening…'}
           {status === 'thinking' && 'thinking…'}

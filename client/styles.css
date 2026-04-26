@@ -209,37 +209,120 @@ footer {
   cursor: not-allowed;
 }
 
-.lang-toggle {
+.lang-bar {
   display: flex;
-  gap: 0.25rem;
+  align-items: center;
+  gap: 0.5rem;
   justify-content: center;
   padding: 0.5rem 0;
   border-top: 1px solid var(--border);
   border-bottom: 1px solid var(--border);
   margin: 0.5rem 0;
+  font-size: 0.85rem;
 }
 
-.lang-btn {
-  padding: 0.4rem 0.9rem;
-  font-size: 0.85rem;
+.lang-bar-label {
+  color: var(--muted);
+  font-style: italic;
+  text-transform: lowercase;
+}
+
+.lang-picker {
+  position: relative;
+  min-width: 180px;
+}
+
+.lang-picker-button {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  width: 100%;
+  padding: 0.4rem 0.8rem;
   font-family: inherit;
   font-style: italic;
-  color: var(--muted);
-  background: transparent;
-  border: 1px solid transparent;
-  border-radius: 999px;
-  cursor: pointer;
-  transition: color 0.15s, background 0.15s, border-color 0.15s;
-}
-
-.lang-btn:hover {
-  color: var(--fg);
-}
-
-.lang-btn-active {
+  font-size: 0.9rem;
   color: var(--fg);
   background: var(--user-bg);
-  border-color: var(--border);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  cursor: pointer;
+  transition: border-color 0.15s;
+}
+
+.lang-picker-button:hover {
+  border-color: var(--accent);
+}
+
+.lang-picker-caret {
+  font-size: 0.7rem;
+  color: var(--muted);
+}
+
+.lang-picker-open {
+  background: var(--bg);
+  border: 1px solid var(--accent);
+  border-radius: 0.5rem;
+  overflow: hidden;
+  position: absolute;
+  /* Drop UP — anchored to the bottom of the button so it grows upward */
+  bottom: calc(100% + 4px);
+  left: 0;
+  width: max(100%, 240px);
+  z-index: 10;
+  box-shadow: 0 -6px 24px rgba(0, 0, 0, 0.15);
+  display: flex;
+  flex-direction: column;
+}
+
+.lang-picker-input {
+  width: 100%;
+  padding: 0.5rem 0.75rem;
+  font-family: inherit;
+  font-size: 0.9rem;
+  color: var(--fg);
+  background: var(--bg);
+  border: none;
+  border-top: 1px solid var(--border);
+  outline: none;
+  box-sizing: border-box;
+}
+
+.lang-picker-list {
+  max-height: 280px;
+  overflow-y: auto;
+  margin: 0;
+  padding: 0.25rem 0;
+  list-style: none;
+}
+
+.lang-picker-item {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  padding: 0.4rem 0.75rem;
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+
+.lang-picker-item.is-highlight {
+  background: var(--user-bg);
+}
+
+.lang-picker-item-label {
+  font-style: italic;
+}
+
+.lang-picker-item-sub {
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+.lang-picker-empty {
+  padding: 0.5rem 0.75rem;
+  color: var(--muted);
+  font-size: 0.85rem;
+  font-style: italic;
 }
 
 .user-bar {

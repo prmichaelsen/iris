@@ -18,18 +18,30 @@ if (!ELEVEN_KEY) {
 
 const anthropic = new Anthropic()
 
-const SYSTEM_PROMPT = `You are Iris, a warm and patient bilingual conversation partner who is fluent in German and English. You help people practice both languages through natural conversation.
+const BASE_PROMPT = `You are Iris, a warm and patient language tutor. The user's native language is English; you should treat English as their fallback for explanations.
 
 Style guidelines:
 - This is voice chat. Keep replies short — 1 to 3 sentences. Conversational, not lecture-like.
-- Mirror the user's language mix. If they speak German, reply in German. If they speak English, reply in English. If they code-switch, code-switch back.
-- When the user is clearly the learner, gently weave in target-language vocabulary or phrasing — don't overload, one or two new words per turn.
-- If they make a small mistake, you can gently model the correct phrasing in your reply without explicitly correcting them, unless they ask for correction.
-- Occasionally ask a follow-up question to keep the conversation flowing.
+- Gently model correct phrasing when the user makes a small mistake, instead of explicitly correcting them — unless they ask to be corrected.
+- Occasionally ask a follow-up question to keep practice flowing.
 - Never break character to mention you are an AI or a language model. You are Iris.
-- Use plain text only. No markdown, no emoji, no asterisks for emphasis — your output is read aloud.
+- Use plain text only. No markdown, no emoji, no asterisks for emphasis — your output is read aloud.`
 
-The user is speaking through a speech-to-text system that only knows English and German. If a transcript looks garbled, partly nonsensical, or like a different language entirely, assume it is mistranscribed German or English from a learner with imperfect pronunciation. Make your best guess at what they meant given the conversation so far, and respond naturally. If you genuinely cannot guess, ask them to repeat in a friendly way — in the language that fits the conversation.`
+const NO_TARGET_PROMPT = `The user has not picked a target language yet. Greet them in English and ask which language they would like to practice. Until they pick one, keep the conversation in English.`
+
+function targetPrompt(nativeName: string, englishName: string): string {
+  return `The user is learning ${nativeName} (${englishName}).
+- Speak ${nativeName} with them by default. Match the user's level — if their ${nativeName} is shaky, slow down and simplify; if it's strong, push them with richer vocabulary or new phrasing.
+- Drop into English (1) when the user asks something in English, (2) when they appear stuck or confused, or (3) to briefly explain a word, idiom, or grammar point. After explaining, return to ${nativeName} on the next turn.
+- Each reply, when natural, gently introduce one new ${nativeName} word or phrase the user can pick up — don't lecture, just weave it in.
+- If the transcript looks garbled, assume the user was attempting ${nativeName} with imperfect pronunciation and make your best guess from context.`
+}
+
+function buildSystemPrompt(targetLang: { code: string; name: string; english: string } | null): string {
+  return targetLang
+    ? `${BASE_PROMPT}\n\n${targetPrompt(targetLang.name, targetLang.english)}`
+    : `${BASE_PROMPT}\n\n${NO_TARGET_PROMPT}`
+}
 
 const app = express()
 app.get('/healthz', (_req, res) => res.json({ ok: true }))
@@ -40,7 +52,8 @@ const wss = new WebSocketServer({ server, path: '/api/voice' })
 wss.on('connection', (ws) => {
   console.log('[iris] client connected')
   const history: Anthropic.MessageParam[] = []
-  let nextLanguage: string | undefined // ISO-639-3: 'eng' | 'deu' | undefined (auto)
+  let nextLanguage: string | undefined
+  let targetLang: { code: string; name: string; english: string } | null = null
 
   ws.on('message', async (data, isBinary) => {
     if (!isBinary) {
@@ -48,7 +61,13 @@ wss.on('connection', (ws) => {
         const msg = JSON.parse(data.toString())
         if (msg.type === 'reset') history.length = 0
         else if (msg.type === 'language') {
-          nextLanguage = msg.code === 'auto' ? undefined : msg.code
+          if (msg.code === 'auto' || !msg.code) {
+            nextLanguage = undefined
+            targetLang = null
+          } else if (typeof msg.code === 'string' && typeof msg.name === 'string' && typeof msg.english === 'string') {
+            nextLanguage = msg.code
+            targetLang = { code: msg.code, name: msg.name, english: msg.english }
+          }
         }
       } catch {}
       return
@@ -70,7 +89,7 @@ wss.on('connection', (ws) => {
       const stream = anthropic.messages.stream({
         model: MODEL,
         max_tokens: 512,
-        system: SYSTEM_PROMPT,
+        system: buildSystemPrompt(targetLang),
         messages: history,
       })
 
