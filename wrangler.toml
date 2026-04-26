@@ -1,0 +1,30 @@
+name = "iris"
+main = "worker/index.ts"
+compatibility_date = "2026-04-01"
+compatibility_flags = ["nodejs_compat"]
+workers_dev = true
+
+[[routes]]
+pattern = "askiris.site"
+custom_domain = true
+
+[[routes]]
+pattern = "www.askiris.site"
+custom_domain = true
+
+# Static frontend bundle (Vite output). The Worker handles /api/* and
+# /healthz; everything else falls through to the assets binding.
+[assets]
+directory = "./dist"
+binding = "ASSETS"
+not_found_handling = "single-page-application"
+
+# Non-secret config. Real secrets go via `wrangler secret put`.
+[vars]
+ELEVENLABS_VOICE_ID = "XB0fDUnXU5powFXDhCwa"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "iris"
+database_id = "b321796f-e099-42cd-8add-54502dd65da3"
+migrations_dir = "migrations"

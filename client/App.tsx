@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { Recorder, StreamingPlayer, playBlob, unlockAudioPlayback } from './audio'
+import type { AuthUser } from './AuthGate'
 
 type Status = 'connecting' | 'idle' | 'listening' | 'thinking' | 'speaking' | 'error'
 type Turn = { role: 'user' | 'assistant'; text: string; audio?: Blob }
@@ -11,7 +12,12 @@ const LANG_LABEL: Record<Lang, string> = {
   deu: 'deutsch',
 }
 
-export default function App() {
+interface AppProps {
+  user: AuthUser
+  signOut: () => Promise<void>
+}
+
+export default function App({ user, signOut }: AppProps) {
   const [status, setStatus] = useState<Status>('connecting')
   const [history, setHistory] = useState<Turn[]>([])
   const [partial, setPartial] = useState('')
@@ -38,7 +44,14 @@ export default function App() {
       if (!active) return
       if (typeof e.data === 'string') {
         const msg = JSON.parse(e.data)
-        if (msg.type === 'transcript') {
+        if (msg.type === 'history') {
+          setHistory(
+            (msg.turns as { role: 'user' | 'assistant'; text: string }[]).map((t) => ({
+              role: t.role,
+              text: t.text,
+            })),
+          )
+        } else if (msg.type === 'transcript') {
           setHistory((h) => [...h, { role: 'user', text: msg.text }])
           setStatus('thinking')
         } else if (msg.type === 'response_text') {
@@ -144,6 +157,10 @@ export default function App() {
       <header>
         <h1>Iris</h1>
         <p className="subtitle">Bilingual voice chat — German & English</p>
+        <div className="user-bar">
+          <span className="user-email">{user.email}</span>
+          <button className="signout" onClick={signOut} title="Sign out">sign out</button>
+        </div>
       </header>
 
       <section className="transcript">

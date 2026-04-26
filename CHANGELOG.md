@@ -2,6 +2,23 @@
 
 All notable changes to Iris are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versioning follows [SemVer](https://semver.org/).
 
+## [0.4.0] - 2026-04-26
+
+### Added
+- **Cloudflare Workers backend.** Production deployment runs as a Worker with WebSocket support via `WebSocketPair`. The Node + Express + `ws` server in `server/` stays for local dev (`npm run dev`); production uses `worker/index.ts` (`npm run deploy`).
+- **Custom domain.** `askiris.site` and `www.askiris.site` bound as Worker custom domains via `[[routes]]` in `wrangler.toml` plus the workers.dev fallback URL.
+- **Email + password auth on D1.** PBKDF2 password hashing via Web Crypto (no deps), session cookies (`HttpOnly`, `Secure`, `SameSite=Lax`, 30-day TTL). Routes: `POST /api/auth/signup`, `POST /api/auth/login`, `POST /api/auth/logout`, `GET /api/auth/me`.
+- **Per-user conversation persistence on D1.** Schema: `users`, `sessions`, `conversations`, `messages`. WebSocket gated on auth — rejects 401 if no valid session. On connect, the Worker loads the user's most-recent conversation and replays it to the client; each user/assistant turn is persisted to D1 as it happens.
+- **Login / signup UI** (`AuthGate.tsx`) — single email + password form, login/signup toggle, redirects to chat on success. App header shows the signed-in user's email and a sign-out button.
+- `npm run deploy` script: `vite build && wrangler deploy`. `npm run secrets:put` walks through pushing both Anthropic and ElevenLabs keys via `wrangler secret put`.
+
+### Changed
+- WebSocket protocol: server now sends an initial `{type: 'history', turns: [...]}` message on connect when the user has prior turns, so the client renders existing conversation immediately.
+- Reset (`{type: 'reset'}`) now also deletes the conversation's persisted messages on the server side.
+
+### Fixed
+- **Cloudflare Workers WebSocket binary frames arrive as `Blob`, not `ArrayBuffer`** (despite some docs suggesting otherwise — runtime behavior matches the browser default). My initial `new Uint8Array(data as ArrayBuffer)` cast was silently producing a zero-length array, causing every transcription to fail with Scribe's "uploaded file is empty or corrupted" error in production. Worker now branches on `data instanceof Blob` and calls `await data.arrayBuffer()` first.
+
 ## [0.3.0] - 2026-04-26
 
 ### Added
