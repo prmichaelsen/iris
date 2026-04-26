@@ -2,6 +2,18 @@
 
 All notable changes to Iris are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versioning follows [SemVer](https://semver.org/).
 
+## [0.6.0] - 2026-04-26
+
+### Added
+- **Curriculum schema** (`migrations/0003_curriculum_schema.sql`): `vocab_items`, `vocab_examples`, `sentences`, `sentence_pairs`, `sentence_vocab`, `lessons`, `lesson_vocab`, `user_vocab_progress` (with SM-2 spaced-repetition fields: `ease`, `interval_days`, `due_at`), and `user_lesson_progress`. CASCADE deletes everywhere on user/vocab/lesson removal.
+- **Goethe-Institut Wortlisten ingested into D1**: 4,870 unique vocab items across A1 (678) / A2 (1,400) / B1 (2,792) plus 7,311 curated example sentences with English translations. Source: community mirror at `github.com/ilkermeliksitki/goethe-institute-wordlist` (Goethe-Institut official PDFs).
+- **Ingest script** `scripts/seed/goethe.ts` (run via `npm run seed:goethe`) — fetches all three CEFR-level TSVs, normalizes lemmas (strips articles into a separate column, drops sense numbers, drops plural suffix markers), and emits `migrations/0004_seed_goethe.sql` as a versioned, replayable migration.
+
+### Notes
+- **D1 has no `BEGIN TRANSACTION`** — Workers Durable Objects own transaction semantics. The seed script writes plain auto-commit statements. (D1's "statement too long" error in this case was misleading; actual cause was the `BEGIN TRANSACTION` keyword.)
+- Per-statement size cap: keep multi-row INSERTs to ≤25 rows (~3.7KB max) to stay safely under D1's per-statement bounds.
+- The Goethe wordlist treats different senses of a word (`abholen(1)`, `abholen(2)`) as separate entries; the normalizer collapses them by lemma but each sense's example sentence is preserved on the canonical row.
+
 ## [0.5.1] - 2026-04-26
 
 ### Changed
