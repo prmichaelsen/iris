@@ -50,3 +50,6 @@ coverage/
 .temp/
 .tmp/
 .firebase/
+
+# Generated runtime cache (prefix audio, etc.)
+data/

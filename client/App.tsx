@@ -1,14 +1,22 @@
 import { useEffect, useRef, useState } from 'react'
-import { Recorder, StreamingPlayer } from './audio'
+import { Recorder, StreamingPlayer, withPrefixAsWav } from './audio'
 
 type Status = 'connecting' | 'idle' | 'listening' | 'thinking' | 'speaking' | 'error'
 type Turn = { role: 'user' | 'assistant'; text: string }
+type Lang = 'auto' | 'eng' | 'deu'
+
+const LANG_LABEL: Record<Lang, string> = {
+  auto: 'auto',
+  eng: 'english',
+  deu: 'deutsch',
+}
 
 export default function App() {
   const [status, setStatus] = useState<Status>('connecting')
   const [history, setHistory] = useState<Turn[]>([])
   const [partial, setPartial] = useState('')
   const [error, setError] = useState<string | null>(null)
+  const [lang, setLang] = useState<Lang>('auto')
 
   const wsRef = useRef<WebSocket | null>(null)
   const recorderRef = useRef(new Recorder())
@@ -16,16 +24,18 @@ export default function App() {
   const partialRef = useRef('')
 
   useEffect(() => {
+    let active = true
     const proto = location.protocol === 'https:' ? 'wss:' : 'ws:'
     const ws = new WebSocket(`${proto}//${location.host}/api/voice`)
     ws.binaryType = 'arraybuffer'
     wsRef.current = ws
 
-    ws.onopen = () => setStatus('idle')
-    ws.onclose = () => setStatus('error')
-    ws.onerror = () => setError('WebSocket connection failed')
+    ws.onopen = () => active && setStatus('idle')
+    ws.onclose = () => active && setStatus('error')
+    ws.onerror = () => active && setError('WebSocket connection failed')
 
     ws.onmessage = async (e) => {
+      if (!active) return
       if (typeof e.data === 'string') {
         const msg = JSON.parse(e.data)
         if (msg.type === 'transcript') {
@@ -51,7 +61,10 @@ export default function App() {
       }
     }
 
-    return () => ws.close()
+    return () => {
+      active = false
+      ws.close()
+    }
   }, [])
 
   const startTalk = async () => {
@@ -72,8 +85,13 @@ export default function App() {
       setStatus('idle')
       return
     }
-    const buf = await blob.arrayBuffer()
-    wsRef.current?.send(buf)
+    try {
+      const wav = await withPrefixAsWav(blob)
+      wsRef.current?.send(await wav.arrayBuffer())
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'audio prep failed')
+      setStatus('idle')
+    }
   }
 
   const reset = () => {
@@ -81,6 +99,11 @@ export default function App() {
     partialRef.current = ''
     setPartial('')
     wsRef.current?.send(JSON.stringify({ type: 'reset' }))
+  }
+
+  const setLanguage = (next: Lang) => {
+    setLang(next)
+    wsRef.current?.send(JSON.stringify({ type: 'language', code: next }))
   }
 
   useEffect(() => {
@@ -130,6 +153,23 @@ export default function App() {
       </section>
 
       {error && <div className="error">{error}</div>}
+
+      <div className="lang-toggle">
+        {(['auto', 'eng', 'deu'] as const).map((opt) => (
+          <button
+            key={opt}
+            className={`lang-btn ${lang === opt ? 'lang-btn-active' : ''}`}
+            onClick={() => setLanguage(opt)}
+            title={
+              opt === 'auto'
+                ? 'Let Scribe detect the language (may pick Dutch on bad German)'
+                : `Force input language to ${LANG_LABEL[opt]}`
+            }
+          >
+            {LANG_LABEL[opt]}
+          </button>
+        ))}
+      </div>
 
       <footer>
         <button
