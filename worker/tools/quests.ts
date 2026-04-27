@@ -304,8 +304,10 @@ async function listQuests(ctx: ToolContext, regionId?: RegionId): Promise<string
 
     // A narrative quest requires its character's region to be unlocked.
     // Non-narrative quests (skill/achievement/etc.) are always available at tier 1.
+    // Per spec R7: Berlin is always unlocked at start, even before explicit user_regions row.
     const hasCharacter = !!q.character_id
-    const available = hasCharacter ? q.region_unlocked === 1 : true
+    const isBerlin = q.character_region_id === 'region_berlin'
+    const available = hasCharacter ? (q.region_unlocked === 1 || isBerlin) : true
 
     return {
       quest_id: q.id,
@@ -349,20 +351,29 @@ async function activateQuest(ctx: ToolContext, questId: string): Promise<string>
     })
   }
 
-  // Check if the character's region is unlocked
-  const regionUnlocked = await env.DB.prepare(
-    `SELECT unlocked_at FROM user_regions WHERE user_id = ? AND region_id = ?`,
-  )
-    .bind(userId, character.region_id)
-    .first<{ unlocked_at: string }>()
+  // Check if the character's region is unlocked.
+  // Per spec R7: Berlin is always unlocked at start.
+  const isBerlin = character.region_id === 'region_berlin'
+  if (!isBerlin) {
+    const regionUnlocked = await env.DB.prepare(
+      `SELECT unlocked_at FROM user_regions WHERE user_id = ? AND region_id = ?`,
+    )
+      .bind(userId, character.region_id)
+      .first<{ unlocked_at: string }>()
 
-  if (!regionUnlocked) {
-    return JSON.stringify({
-      error: {
-        code: 'REGION_LOCKED',
-        message: `Region ${character.region_name} must be unlocked before talking to ${character.name}`,
-      },
-    })
+    if (!regionUnlocked) {
+      return JSON.stringify({
+        error: {
+          code: 'REGION_LOCKED',
+          message: `Region ${character.region_name} must be unlocked before talking to ${character.name}`,
+        },
+      })
+    }
+  } else {
+    // Auto-unlock Berlin on first access
+    await env.DB.prepare(
+      `INSERT OR IGNORE INTO user_regions (user_id, region_id, unlocked_at) VALUES (?, 'region_berlin', ?)`,
+    ).bind(userId, nowSec()).run()
   }
 
   // Record interaction start
