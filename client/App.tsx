@@ -7,6 +7,7 @@ import { GenderPickActive, GenderPickResult } from './widgets/GenderPick'
 import { DefinitionActive, DefinitionResult } from './widgets/Definition'
 import { FillBlankActive, FillBlankResult } from './widgets/FillBlank'
 import TimerCountdown from './TimerCountdown'
+import { WordHoverText } from './WordHoverText'
 import type { AuthUser } from './AuthGate'
 import LanguagePicker from './LanguagePicker'
 import { findLanguage } from './languages'
@@ -383,7 +384,11 @@ export default function App({ user, signOut }: AppProps) {
               return (
                 <div className="turn turn-assistant">
                   <div className="role">Iris</div>
-                  <div className="text">{item.text}</div>
+                  <div className="text">
+                    {lang && lang !== 'auto'
+                      ? <WordHoverText text={item.text} lang={lang} />
+                      : item.text}
+                  </div>
                 </div>
               )
             }
@@ -426,7 +431,13 @@ export default function App({ user, signOut }: AppProps) {
                     </button>
                   )}
                 </div>
-                {turn.text && !isJson(turn.text) && <div className="text">{turn.text}</div>}
+                {turn.text && !isJson(turn.text) && (
+                  <div className="text">
+                    {turn.role === 'assistant' && lang && lang !== 'auto'
+                      ? <WordHoverText text={turn.text} lang={lang} />
+                      : turn.text}
+                  </div>
+                )}
                 {turn.widgets?.map((wt) => {
                   const isActive = activeWidget?.widget_id === wt.widget.widget_id
 

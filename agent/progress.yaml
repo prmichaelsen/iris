@@ -53,10 +53,10 @@ milestones:
 
   - id: M7
     title: Exercises Hub & UX
-    status: planned
+    status: in_progress
     file: null
-    tasks_total: 3
-    tasks_complete: 0
+    tasks_total: 4
+    tasks_complete: 1
 
   - id: M8
     title: Hardening
@@ -188,13 +188,21 @@ tasks:
       depends_on: [2, 3, 4, 5, 6, 7]
 
   milestone_7:
+    - id: 0
+      title: Study List System (retroactive)
+      status: complete
+      file: agent/tasks/milestone-7-exercises-hub-ux/task-0-study-list-system.md
+      estimated_hours: 3
+      started: 2026-04-27
+      actual_hours: 2
+
     - id: 1
       title: Word Hover Translation Popover
-      status: not_started
+      status: complete
       file: agent/tasks/milestone-7-exercises-hub-ux/task-1-word-hover-translation-popover.md
       estimated_hours: 4
-      started: null
-      actual_hours: null
+      started: 2026-04-27
+      actual_hours: 1.5
 
     - id: 2
       title: Session Freshness Prompt Injector

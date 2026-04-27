@@ -31,6 +31,7 @@ import {
 } from './conversation-state'
 import { updateSessionCharacterState } from './session-state'
 import { buildSystemPrompt as injectorsBuildSystemPrompt } from './prompt-injectors'
+import { lookupWord } from './word-lookup'
 
 const ELEVEN_API = 'https://api.elevenlabs.io/v1'
 const MODEL = 'claude-opus-4-7'
@@ -202,6 +203,10 @@ export default {
       return handleMe(request, env)
     }
 
+    if (url.pathname === '/api/word' && request.method === 'GET') {
+      return handleWordLookup(request, env)
+    }
+
     if (url.pathname === '/healthz') {
       return Response.json({ ok: true })
     }
@@ -325,6 +330,19 @@ function jsonError(message: string, status: number): Response {
     status,
     headers: { 'Content-Type': 'application/json' },
   })
+}
+
+async function handleWordLookup(request: Request, env: Env): Promise<Response> {
+  const session = await getCurrentUser(env.DB, request)
+  if (!session) return jsonError('unauthorized', 401)
+
+  const url = new URL(request.url)
+  const q = url.searchParams.get('q')
+  const lang = url.searchParams.get('lang') || 'de'
+  if (!q) return jsonError('missing q', 400)
+
+  const result = await lookupWord(env.DB, env.ANTHROPIC_API_KEY, q, lang)
+  return Response.json(result)
 }
 
 async function handleWebSocket(request: Request, env: Env): Promise<Response> {
