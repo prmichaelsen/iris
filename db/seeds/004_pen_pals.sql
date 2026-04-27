@@ -48,15 +48,8 @@ INSERT INTO pen_pals (id, character_id, region_id, bio_de, bio_en, topics, recom
     '["folklore", "fairy_tales", "forest_life", "traditions", "nature", "mythology"]',
     '{"music": ["Die Toten Hosen", "Einstürzende Neubauten", "Siddhartha"], "films": ["Märchenperlen", "Die Nibelungen", "Der Räuber Hotzenplotz"], "books": ["Grimms Märchen", "Der Struwwelpeter", "Schwarzwaldgeschichten"]}'
   ),
-  (
-    'penpal_karl',
-    'char_karl',
-    'region_saxony',
-    'Historiker aus Sachsen, 44 Jahre alt. Ehemaliger DDR-Bürger, nachdenklich über die Geschichte der Wiedervereinigung.',
-    'Historian from Saxony, 44 years old. Former East German, reflective about reunification history.',
-    '["history", "reunification", "east_vs_west", "politics", "museums", "memory"]',
-    '{"music": ["Rammstein", "Silly", "Puhdys"], "films": ["Das Leben der Anderen", "Sonnenallee", "Barbara"], "books": ["Im Westen nichts Neues", "Stasiland", "Ostalgie"]}'
-  ),
+  -- penpal_karl removed in M10: Saxony pen pal needs a dedicated char_henrik per spec
+  -- TODO(M14): Add Henrik character for Saxony region, then restore this pen pal entry
   (
     'penpal_anna',
     'char_anna',

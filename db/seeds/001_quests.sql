@@ -75,7 +75,7 @@ INSERT INTO quests (id, name_de, name_en, description_de, description_en, catego
 -- ============================================
 
 INSERT INTO quests (id, name_de, name_en, description_de, description_en, category, badge_skill, tier_thresholds, points_reward, is_repeatable, is_hidden, character_id, success_criteria) VALUES
-  ('erste_bestellung', 'Erste Bestellung', 'First Order', 'Bestelle beim ungeduldigen Bäcker Karl in Berlin', 'Order from impatient Berlin baker Karl', 'narrative', NULL, '[1]', 150, 0, 0, 'char_karl_baker', '{"max_timeouts": 3, "timer_seconds": 5, "success_condition": "Complete order without 3 timeouts"}');
+  ('erste_bestellung', 'Erste Bestellung', 'First Order', 'Bestelle beim ungeduldigen Bäcker Karl in Berlin', 'Order from impatient Berlin baker Karl', 'cultural', NULL, '[1]', 150, 0, 0, 'char_karl_baker', '{"max_timeouts": 3, "timer_seconds": 5, "success_condition": "Complete order without 3 timeouts"}');
 
 -- ============================================
 -- PERSONALITY/CULTURAL QUESTS

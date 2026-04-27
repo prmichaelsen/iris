@@ -53,14 +53,9 @@ INSERT INTO collectibles (id, name_de, name_en, category, pen_pal_id, region_id,
   ('collect_greta_forest_charm', 'Waldzauber-Amulett', 'Forest Charm', 'charm', 'penpal_greta', 'region_black_forest', 'legendary', 'Traditionelles Schutzamulett aus dem Schwarzwald', 'Traditional protective charm from Black Forest', '{"tradition": "forest_magic", "blessed": true}');
 
 -- ============================================
--- KARL'S COLLECTIBLES (Saxony Historian)
+-- SAXONY HISTORICAL COLLECTIBLES
+-- TODO(M14): Restore once char_henrik + penpal_henrik are added for Saxony region
 -- ============================================
-
-INSERT INTO collectibles (id, name_de, name_en, category, pen_pal_id, region_id, rarity, description_de, description_en, metadata) VALUES
-  ('collect_karl_ddr_stamp', 'DDR-Briefmarke', 'GDR Stamp', 'stamp', 'penpal_karl', 'region_saxony', 'uncommon', 'Originale Briefmarke aus der DDR-Zeit', 'Original stamp from GDR era', '{"year": 1985, "series": "Architecture"}'),
-  ('collect_karl_berlin_wall', 'Mauerstück', 'Berlin Wall Piece', 'stone_fragment', 'penpal_karl', 'region_saxony', 'rare', 'Kleines Stück der Berliner Mauer', 'Small piece of the Berlin Wall', '{"year": 1989, "authenticated": true}'),
-  ('collect_karl_newspaper', 'Historische Zeitung', 'Historic Newspaper', 'newspaper', 'penpal_karl', 'region_saxony', 'rare', 'Zeitung vom Tag der Wiedervereinigung', 'Newspaper from Reunification Day', '{"date": "1990-10-03", "headline": "Deutschland ist wieder eins"}'),
-  ('collect_karl_museum_pass', 'Museums-Pass', 'Museum Pass', 'pass', 'penpal_karl', 'region_saxony', 'legendary', 'Lebenslanger Pass für Dresdner Museen', 'Lifetime pass for Dresden museums', '{"museums": "all_dresden", "lifetime": true}');
 
 -- ============================================
 -- ANNA'S COLLECTIBLES (Vienna Café Owner)
