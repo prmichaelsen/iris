@@ -39,6 +39,7 @@ export interface ToolContext {
   targetLang: { code: string; name: string; english: string } | null
   turnWidgetBlocks: WidgetContentBlock[]
   pendingWidget: PendingWidget
+  conversationHistory?: Anthropic.MessageParam[]
 }
 
 export interface ToolRegistration {

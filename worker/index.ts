@@ -502,7 +502,7 @@ async function handleWebSocket(request: Request, env: Env): Promise<Response> {
               const result = await executeToolCall(
                 block.name,
                 block.input as Record<string, unknown>,
-                { env, userId, server, send, targetLang, turnWidgetBlocks, pendingWidget },
+                { env, userId, server, send, targetLang, turnWidgetBlocks, pendingWidget, conversationHistory: history },
               )
               toolResults.push({ type: 'tool_result', tool_use_id: block.id, content: result })
             }
@@ -639,7 +639,7 @@ async function handleWebSocket(request: Request, env: Env): Promise<Response> {
           const result = await executeToolCall(
             block.name,
             block.input as Record<string, unknown>,
-            { env, userId, server, send, targetLang, turnWidgetBlocks, pendingWidget },
+            { env, userId, server, send, targetLang, turnWidgetBlocks, pendingWidget, conversationHistory: history },
           )
           toolResults.push({
             type: 'tool_result',
