@@ -333,6 +333,7 @@ Austria & Switzerland (bonus regions, unlockable in any order)
 - **Subquests:** Order at a Spätkauf, navigate the U-Bahn, visit Mauerpark flea market, find the best Döner
 - **Voice Unlock:** Berliner accent
 - **Pen Pal:** Mila (Artist, 27) - Creative, slightly chaotic, passionate about street art
+- **Premium Challenge:** Get past Sven at Berghain (Tier 4 - requires Gold Conversational German)
 
 **Bavaria: "Tradition Meets Modernity"**
 - Heading south to Bavaria. Alpine villages, beer gardens, surprisingly tech-savvy locals.
@@ -408,9 +409,9 @@ Major milestones with significant mastery requirements:
 
 **Berlin: Berghain (The Ultimate Challenge)**
 - **Unlock:** Gold in Conversational German + Silver in Cultural Knowledge + 20 Berlin subquests + Mastery in casual/slang vocabulary
-- **Challenge:** Real-time voice conversation with bouncer (AI character). No correct answers — he evaluates vibe, fluency, cultural awareness.
+- **Challenge:** Real-time voice conversation with Sven, the bouncer (AI character). No correct answers — he evaluates vibe, fluency, cultural awareness.
 - **Evaluation:** Natural conversational flow, casual German (not textbook), cultural awareness, confidence
-- **Reward:** Exclusive Berghain Foto series (8 images of legendary interior), "Berliner Nachtleben" badge, bouncer respect
+- **Reward:** Exclusive Berghain Foto series (8 images of legendary interior), "Berliner Nachtleben" badge, Sven's respect
 
 **Bavaria: Neuschwanstein at Golden Hour**
 - **Unlock:** Complete 20 Bavaria subquests + Silver in Cultural Knowledge
