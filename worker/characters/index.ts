@@ -1,17 +1,18 @@
 import type { Character } from './types'
 import { iris } from './iris'
+import { karl } from './karl'
 
 /**
  * Character Registry
  *
  * Central repository for all available characters.
- * Future characters (Karl, Mila, etc.) will be added here.
+ * Future characters (Mila, Lena, etc.) will be added here.
  */
 
 const characters = new Map<string, Character>([
   ['iris', iris],
+  ['char_karl_baker', karl],
   // Future characters:
-  // ['karl', karl],
   // ['mila', mila],
   // ['lena', lena],
   // ['thomas', thomas],
