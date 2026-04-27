@@ -105,6 +105,41 @@ interface SentenceOrderWidget extends WidgetBase {
   cefr_level: string
 }
 
+interface ArticleInContextWidget extends WidgetBase {
+  type: 'article-in-context'
+  sentence: string       // "Ich gebe ___ Mann das Buch." (blank = article)
+  hint?: string          // optional: "dative, masculine"
+  expected: string       // "dem"
+  options?: string[]     // optional multiple-choice: ["den", "dem", "der", "das"]
+  cefr_level: string
+}
+
+interface PluralizationWidget extends WidgetBase {
+  type: 'pluralization'
+  noun: string           // "das Kind"
+  expected: string       // "die Kinder"
+  hint?: string          // optional: plural rule hint e.g. "-er"
+  cefr_level: string
+}
+
+interface ConjugationWidget extends WidgetBase {
+  type: 'conjugation'
+  verb: string           // infinitive: "fahren"
+  subject: string        // "ich" | "du" | "er/sie/es" | "wir" | "ihr" | "sie/Sie"
+  tense: string          // "Präsens" | "Präteritum" | "Perfekt" | "Futur I"
+  expected: string       // "fahre"
+  context_sentence?: string // optional: full sentence for context
+  cefr_level: string
+}
+
+interface DefinitionWidget extends WidgetBase {
+  type: 'definition'
+  word: string           // German word shown: "die Abfahrt"
+  audio?: boolean        // true = server already sent TTS audio
+  expected_meaning: string  // reference English meaning for Claude grading
+  cefr_level: string
+}
+
 type Widget =
   | FlashcardMatchingWidget
   | FlashcardFreeformWidget
@@ -112,6 +147,10 @@ type Widget =
   | ComprehensionWidget
   | FillBlankWidget
   | GenderPickWidget
+  | ArticleInContextWidget
+  | PluralizationWidget
+  | ConjugationWidget
+  | DefinitionWidget
   | SentenceOrderWidget
 ```
 
@@ -125,13 +164,17 @@ interface WidgetResponse {
 }
 
 // Per-widget answer shapes:
-// flashcard-matching:  { selected_index: number }
-// flashcard-freeform:  { text: string }
-// dictation:           { text: string }
-// comprehension:       { text: string }
-// fill-blank:          { text: string }
-// gender-pick:         { article: 'der' | 'die' | 'das' }
-// sentence-order:      { order: number[] }
+// flashcard-matching:    { selected_index: number }
+// flashcard-freeform:    { text: string }
+// dictation:             { text: string }
+// comprehension:         { text: string }
+// fill-blank:            { text: string }
+// gender-pick:           { article: 'der' | 'die' | 'das' }
+// article-in-context:    { text: string }  (or { selected_index: number } if options provided)
+// pluralization:         { text: string }
+// conjugation:           { text: string }
+// definition:            { text: string }  (Claude grades — synonym/paraphrase tolerance)
+// sentence-order:        { order: number[] }
 ```
 
 ### WebSocket Message Protocol Extensions
@@ -233,6 +276,83 @@ One word is removed; user types it. Tests grammar and vocabulary in context.`,
       },
     },
   },
+  {
+    name: 'definition_quiz',
+    description: `Quiz the user on German word definitions. Shows a German word
+(optionally spoken aloud); user types the English meaning. Claude grades the
+response with synonym and paraphrase tolerance. Tests active vocabulary recall.`,
+    input_schema: {
+      type: 'object',
+      properties: {
+        count: { type: 'integer', minimum: 1, maximum: 10 },
+        speak: {
+          type: 'boolean',
+          description: 'If true, speak the word aloud via TTS (tests listening + meaning)',
+        },
+        cefr_level: { type: 'string', enum: ['A1', 'A2', 'B1'] },
+      },
+    },
+  },
+  {
+    name: 'article_quiz',
+    description: `Quiz the user on German articles in context — full declension
+system (der/die/das/den/dem/des/einen/einem/etc), not just nominative gender.
+Shows a sentence with a blanked article; user fills it in. Tests case
+awareness (nominative, accusative, dative, genitive).`,
+    input_schema: {
+      type: 'object',
+      properties: {
+        count: { type: 'integer', minimum: 1, maximum: 10 },
+        cases: {
+          type: 'array',
+          items: { type: 'string', enum: ['nominative', 'accusative', 'dative', 'genitive'] },
+          description: 'Which cases to focus on. Omit for mixed.',
+        },
+        mode: {
+          type: 'string',
+          enum: ['freeform', 'multiple_choice'],
+          description: 'freeform = type the article, multiple_choice = pick from 4 options',
+        },
+        cefr_level: { type: 'string', enum: ['A1', 'A2', 'B1'] },
+      },
+    },
+  },
+  {
+    name: 'pluralization_quiz',
+    description: `Quiz the user on German noun plurals. Shows a singular noun with
+its article; user types the plural form. German plurals are irregular and must
+be memorized — this drill is essential for building that muscle.`,
+    input_schema: {
+      type: 'object',
+      properties: {
+        count: { type: 'integer', minimum: 1, maximum: 10 },
+        cefr_level: { type: 'string', enum: ['A1', 'A2', 'B1'] },
+      },
+    },
+  },
+  {
+    name: 'conjugation_quiz',
+    description: `Quiz the user on German verb conjugation. Shows an infinitive verb,
+a subject pronoun, and a tense; user types the correct conjugated form. Covers
+regular and irregular verbs, separable prefixes, and auxiliary selection.`,
+    input_schema: {
+      type: 'object',
+      properties: {
+        count: { type: 'integer', minimum: 1, maximum: 10 },
+        tenses: {
+          type: 'array',
+          items: { type: 'string', enum: ['Präsens', 'Präteritum', 'Perfekt', 'Futur I'] },
+          description: 'Which tenses to test. Omit for mixed.',
+        },
+        subjects: {
+          type: 'array',
+          items: { type: 'string', enum: ['ich', 'du', 'er/sie/es', 'wir', 'ihr', 'sie/Sie'] },
+          description: 'Which subject pronouns to use. Omit for mixed.',
+        },
+        cefr_level: { type: 'string', enum: ['A1', 'A2', 'B1'] },
+      },
+    },
+  },
 ]
 ```
 
@@ -270,6 +390,10 @@ Claude streaming loop (max 10 tool iterations):
 | comprehension | Claude grades (synonym tolerance) | 1-2s |
 | fill-blank | Exact match after normalization | 0ms |
 | gender-pick | Exact match (local) | 0ms |
+| article-in-context | Exact match (freeform) or index (multiple-choice) | 0ms |
+| pluralization | Exact match after normalization | 0ms |
+| conjugation | Exact match + Claude fallback for edge cases (separable prefixes, auxiliary forms) | 0-2s |
+| definition | Claude grades (synonym/paraphrase tolerance — "departure" ≈ "leaving" ≈ "the act of departing") | 1-2s |
 | sentence-order | Array comparison (local) | 0ms |
 
 Local grading is preferred. Claude grading is reserved for freeform text where synonyms, paraphrases, and partial credit matter.
@@ -333,10 +457,11 @@ function sm2Update(correct: boolean, prev: { ease: number; interval_days: number
 ## Migration Path
 
 1. **Phase 1 (MVP)**: `flashcard-matching` only. Define all widget types. Single-card flow (one card at a time, not a batch). No audio for the word yet — just text + options.
-2. **Phase 2**: Add TTS for the flashcard word (speak before showing options). Add `gender-pick` (second-simplest widget).
-3. **Phase 3**: Add `dictation` and `comprehension` (hearing-only modes). Add `fill-blank`.
-4. **Phase 4**: Batch mode (5 cards in sequence), session summary ("you scored 4/5, here are the words to review").
-5. **Phase 5**: `sentence-order`, `flashcard-freeform`. Claude-graded freeform modes.
+2. **Phase 2**: Add TTS for the flashcard word (speak before showing options). Add `gender-pick` and `article-in-context` (article/case system drills).
+3. **Phase 3**: Add `pluralization` and `conjugation` (core grammar widgets). These require Claude to generate the quiz content since the data isn't in our vocab tables.
+4. **Phase 4**: Add `dictation` and `comprehension` (hearing-only modes). Add `fill-blank`.
+5. **Phase 5**: Batch mode (5 cards in sequence), session summary ("you scored 4/5, here are the words to review").
+6. **Phase 6**: `sentence-order`, `flashcard-freeform`. Claude-graded freeform modes.
 
 ---
 
