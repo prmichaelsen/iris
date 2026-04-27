@@ -693,48 +693,46 @@ async function executeFlashcard(
     return `No vocabulary available for ${targetLang.english}. Try a different CEFR level.`
   }
 
-  // Generate distractors for each card
+  // Ensure all words have glosses + distractors cached in D1.
+  // On first encounter per word, a small Claude call generates them.
+  await ensureGlossesAndDistractors(env, vocabCards, targetLang.code)
+
+  // Build flashcard cards from cached data
   const widgetId = newId()
   const cards: FlashcardMatchingCard[] = []
   const correctMap = new Map<string, { correct_index: number; correct_answer: string; word: string }>()
 
   for (const vc of vocabCards) {
     const cardId = newId()
-    const correctAnswer = vc.sentence_en || vc.lemma
 
-    // Get distractors: other words at same CEFR level
-    const distractorResult = await env.DB
-      .prepare(
-        `SELECT DISTINCT e.sentence_en FROM vocab_items v
-         JOIN vocab_examples e ON e.vocab_item_id = v.id
-         WHERE v.language = ? AND v.cefr_level = ? AND v.lemma != ?
-         ORDER BY RANDOM() LIMIT 3`,
-      )
-      .bind(targetLang.code, vc.cefr_level, vc.lemma)
-      .all<{ sentence_en: string }>()
+    // Fetch cached gloss + distractors
+    const vocabRow = await env.DB
+      .prepare('SELECT id, gloss_en FROM vocab_items WHERE lemma = ? AND language = ? AND source = \'goethe\' LIMIT 1')
+      .bind(vc.lemma, targetLang.code)
+      .first<{ id: number; gloss_en: string | null }>()
 
-    let distractors = (distractorResult.results || []).map((r) => r.sentence_en)
+    const correctAnswer = vocabRow?.gloss_en || vc.lemma
+    const word = vc.article ? `${vc.article} ${vc.lemma}` : vc.lemma
 
-    // Fallback to adjacent CEFR levels if not enough distractors
-    if (distractors.length < 3) {
-      const fallbackResult = await env.DB
-        .prepare(
-          `SELECT DISTINCT e.sentence_en FROM vocab_items v
-           JOIN vocab_examples e ON e.vocab_item_id = v.id
-           WHERE v.language = ? AND v.lemma != ? AND e.sentence_en != ?
-           ORDER BY RANDOM() LIMIT ?`,
-        )
-        .bind(targetLang.code, vc.lemma, correctAnswer, 3 - distractors.length)
-        .all<{ sentence_en: string }>()
-      distractors = distractors.concat((fallbackResult.results || []).map((r) => r.sentence_en))
+    let distractors: string[] = []
+    if (vocabRow) {
+      const dResult = await env.DB
+        .prepare('SELECT distractor_en FROM vocab_distractors WHERE vocab_item_id = ? ORDER BY RANDOM() LIMIT 3')
+        .bind(vocabRow.id)
+        .all<{ distractor_en: string }>()
+      distractors = (dResult.results || []).map((r) => r.distractor_en)
     }
 
-    // Ensure exactly 3 distractors (pad with generic if DB is sparse)
+    // Pad if somehow we don't have 3 distractors
     while (distractors.length < 3) {
-      distractors.push(`[option ${distractors.length + 2}]`)
+      const fallback = await env.DB
+        .prepare('SELECT gloss_en FROM vocab_items WHERE language = ? AND lemma != ? AND gloss_en IS NOT NULL ORDER BY RANDOM() LIMIT 1')
+        .bind(targetLang.code, vc.lemma)
+        .first<{ gloss_en: string }>()
+      distractors.push(fallback?.gloss_en || `option ${distractors.length + 2}`)
     }
 
-    // Shuffle options: correct answer + 3 distractors
+    // Shuffle: correct answer + 3 distractors
     const options = [correctAnswer, ...distractors.slice(0, 3)]
     const shuffled = options
       .map((o, i) => ({ o, sort: Math.random(), origIdx: i }))
@@ -742,8 +740,8 @@ async function executeFlashcard(
     const shuffledOptions = shuffled.map((s) => s.o)
     const correctIndex = shuffled.findIndex((s) => s.origIdx === 0)
 
-    cards.push({ card_id: cardId, word: vc.display || `${vc.article ? vc.article + ' ' : ''}${vc.lemma}`, options: shuffledOptions })
-    correctMap.set(cardId, { correct_index: correctIndex, correct_answer: correctAnswer, word: vc.display || vc.lemma })
+    cards.push({ card_id: cardId, word, options: shuffledOptions })
+    correctMap.set(cardId, { correct_index: correctIndex, correct_answer: correctAnswer, word })
   }
 
   // Store correct answers server-side
@@ -845,6 +843,100 @@ async function executeFlashcard(
   // Build text summary for Claude
   const summary = cardResults.map((c) => `${c.word} ${c.correct ? '✓' : '✗'}`).join(', ')
   return `User scored ${correctCount}/${cards.length}: ${summary}`
+}
+
+async function ensureGlossesAndDistractors(
+  env: Env,
+  vocabCards: VocabCard[],
+  langCode: string,
+): Promise<void> {
+  // Find words missing glosses
+  const needsGloss: { id: number; lemma: string; article: string | null }[] = []
+  for (const vc of vocabCards) {
+    const row = await env.DB
+      .prepare('SELECT id, gloss_en FROM vocab_items WHERE lemma = ? AND language = ? AND source = \'goethe\' LIMIT 1')
+      .bind(vc.lemma, langCode)
+      .first<{ id: number; gloss_en: string | null }>()
+    if (!row) continue
+    // Check if this word has both a gloss and distractors
+    if (!row.gloss_en) {
+      needsGloss.push({ id: row.id, lemma: vc.lemma, article: vc.article })
+      continue
+    }
+    const dCount = await env.DB
+      .prepare('SELECT COUNT(*) AS c FROM vocab_distractors WHERE vocab_item_id = ?')
+      .bind(row.id)
+      .first<{ c: number }>()
+    if (!dCount || dCount.c < 3) {
+      needsGloss.push({ id: row.id, lemma: vc.lemma, article: vc.article })
+    }
+  }
+
+  if (needsGloss.length === 0) return
+
+  // Ask Claude (Haiku for speed + cost) to generate glosses + distractors
+  console.log(`[iris] generating glosses + distractors for ${needsGloss.length} words`)
+  const wordList = needsGloss
+    .map((w) => `${w.id}|${w.article ? w.article + ' ' : ''}${w.lemma}`)
+    .join('\n')
+
+  const glossClient = new Anthropic({ apiKey: env.ANTHROPIC_API_KEY })
+  const response = await glossClient.messages.create({
+    model: 'claude-haiku-4-5',
+    max_tokens: 4096,
+    messages: [
+      {
+        role: 'user',
+        content: `For each German word, provide:
+1. A short English gloss (1-3 words, like a dictionary entry)
+2. Three plausible-but-wrong English distractors (similar category/difficulty, 1-3 words each)
+
+Format each line as: ID|gloss|distractor1|distractor2|distractor3
+No extra text, just the lines.
+
+Example:
+123|greeting|farewell|question|answer
+456|departure|arrival|entrance|delay
+
+Words:
+${wordList}`,
+      },
+    ],
+  })
+
+  const text = response.content
+    .filter((b): b is Anthropic.TextBlock => b.type === 'text')
+    .map((b) => b.text)
+    .join('')
+
+  // Parse and cache
+  for (const line of text.split('\n')) {
+    const parts = line.trim().split('|')
+    if (parts.length < 4) continue
+    const id = parseInt(parts[0], 10)
+    if (isNaN(id)) continue
+    const gloss = parts[1].trim()
+    const d1 = parts[2]?.trim()
+    const d2 = parts[3]?.trim()
+    const d3 = parts[4]?.trim()
+
+    if (gloss) {
+      await env.DB
+        .prepare('UPDATE vocab_items SET gloss_en = ? WHERE id = ?')
+        .bind(gloss, id)
+        .run()
+    }
+    for (const d of [d1, d2, d3]) {
+      if (d) {
+        await env.DB
+          .prepare('INSERT OR IGNORE INTO vocab_distractors (vocab_item_id, distractor_en) VALUES (?, ?)')
+          .bind(id, d)
+          .run()
+          .catch(() => {})
+      }
+    }
+  }
+  console.log(`[iris] cached glosses + distractors for ${needsGloss.length} words`)
 }
 
 async function updateSm2(
