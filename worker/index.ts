@@ -334,13 +334,18 @@ async function handleWebSocket(request: Request, env: Env): Promise<Response> {
   console.log(`[iris] loaded ${history.length} prior messages for conversation ${conversationId}`)
 
   // Send the loaded history to the client so it can render past turns.
+  // Uses loadHistoryForClient which parses content_blocks for widget turns.
   if (history.length > 0) {
+    const clientHistory = await loadHistoryForClient(env.DB, conversationId)
     server.send(
       JSON.stringify({
         type: 'history',
-        turns: history.map((m) => ({
+        turns: clientHistory.map((m) => ({
           role: m.role,
-          text: typeof m.content === 'string' ? m.content : '',
+          text: m.content_blocks
+            ? m.content_blocks.filter((b): b is import('../shared/types/widgets').TextContentBlock => b.type === 'text').map((b) => b.text).join('')
+            : m.content,
+          content_blocks: m.content_blocks,
         })),
       }),
     )
@@ -435,6 +440,7 @@ async function handleWebSocket(request: Request, env: Env): Promise<Response> {
 
       const tools: Anthropic.Tool[] = targetLang ? [FLASHCARD_TOOL] : []
       let fullAssistantText = ''
+      const turnWidgetBlocks: WidgetContentBlock[] = []
 
       // Tool-use loop: stream Claude, execute any tool calls, feed results back
       for (let iteration = 0; iteration < MAX_TOOL_ITERATIONS; iteration++) {
@@ -484,7 +490,7 @@ async function handleWebSocket(request: Request, env: Env): Promise<Response> {
             block.name,
             block.input as Record<string, unknown>,
             block.id,
-            { env, userId, server, send, targetLang, pendingWidget },
+            { env, userId, server, send, targetLang, turnWidgetBlocks, pendingWidget },
           )
           toolResults.push({
             type: 'tool_result',
@@ -497,10 +503,21 @@ async function handleWebSocket(request: Request, env: Env): Promise<Response> {
         history.push({ role: 'user', content: toolResults })
       }
 
-      // Persist the final assistant text
-      if (fullAssistantText.trim()) {
-        history.push({ role: 'assistant', content: fullAssistantText })
-        await persistMessage(env.DB, conversationId, 'assistant', fullAssistantText)
+      // Persist the assistant turn — as content blocks if widgets were involved
+      if (fullAssistantText.trim() || turnWidgetBlocks.length > 0) {
+        const blocks: ContentBlock[] = []
+        if (fullAssistantText.trim()) {
+          blocks.push({ type: 'text', text: fullAssistantText })
+        }
+        blocks.push(...turnWidgetBlocks)
+
+        history.push({ role: 'assistant', content: fullAssistantText || '(widget interaction)' })
+        await persistMessage(
+          env.DB,
+          conversationId,
+          'assistant',
+          turnWidgetBlocks.length > 0 ? blocks : fullAssistantText,
+        )
       }
 
       // TTS the text response (skip if the turn was pure tool calls with no text)
@@ -635,6 +652,7 @@ interface ToolContext {
   server: WebSocket
   send: (payload: Record<string, unknown>) => void
   targetLang: { code: string; name: string; english: string } | null
+  turnWidgetBlocks: WidgetContentBlock[]
   pendingWidget: {
     widgetId: string | null
     resolve: ((answers: FlashcardMatchingAnswer[]) => void) | null
@@ -802,6 +820,24 @@ async function executeFlashcard(
     }
   }
 
+  // Persist widget lifecycle as a content block
+  ctx.turnWidgetBlocks.push({
+    type: 'widget',
+    widget_type: 'flashcard-matching',
+    widget_id: widgetId,
+    payload: widget,
+    response: { type: 'widget_response', widget_id: widgetId, answers },
+    result: {
+      type: 'widget_result',
+      widget_id: widgetId,
+      widget_type: 'flashcard-matching',
+      score: correctCount,
+      total: cards.length,
+      cards: cardResults,
+    },
+    status: 'completed',
+  })
+
   // Clean up
   pendingWidget.widgetId = null
   pendingWidget.correctMap.clear()
@@ -899,6 +935,12 @@ async function getOrCreateActiveConversation(db: D1Database, userId: string): Pr
   return id
 }
 
+interface HistoryMessage {
+  role: 'user' | 'assistant'
+  content: string
+  content_blocks?: ContentBlock[] | null
+}
+
 async function loadHistory(db: D1Database, conversationId: string): Promise<Anthropic.MessageParam[]> {
   const result = await db
     .prepare(
@@ -906,21 +948,50 @@ async function loadHistory(db: D1Database, conversationId: string): Promise<Anth
     )
     .bind(conversationId)
     .all<{ role: 'user' | 'assistant'; content: string }>()
-  return (result.results || []).map((r) => ({ role: r.role, content: r.content }))
+  return (result.results || []).map((r) => {
+    // Content might be JSON (content blocks) or plain text
+    if (r.content.startsWith('[')) {
+      try {
+        JSON.parse(r.content)
+      } catch {}
+    }
+    return { role: r.role, content: r.content }
+  })
+}
+
+function loadHistoryForClient(db: D1Database, conversationId: string): Promise<HistoryMessage[]> {
+  return db
+    .prepare(
+      'SELECT role, content FROM messages WHERE conversation_id = ? ORDER BY created_at ASC',
+    )
+    .bind(conversationId)
+    .all<{ role: 'user' | 'assistant'; content: string }>()
+    .then((result) =>
+      (result.results || []).map((r) => {
+        let contentBlocks: ContentBlock[] | null = null
+        if (r.content.startsWith('[')) {
+          try {
+            contentBlocks = JSON.parse(r.content) as ContentBlock[]
+          } catch {}
+        }
+        return { role: r.role, content: r.content, content_blocks: contentBlocks }
+      }),
+    )
 }
 
 async function persistMessage(
   db: D1Database,
   conversationId: string,
   role: 'user' | 'assistant',
-  content: string,
+  content: string | ContentBlock[],
 ): Promise<void> {
   const id = newId()
   const t = nowSec()
+  const serialized = typeof content === 'string' ? content : JSON.stringify(content)
   await db.batch([
     db
       .prepare('INSERT INTO messages (id, conversation_id, role, content, created_at) VALUES (?, ?, ?, ?, ?)')
-      .bind(id, conversationId, role, content, t),
+      .bind(id, conversationId, role, serialized, t),
     db.prepare('UPDATE conversations SET updated_at = ? WHERE id = ?').bind(t, conversationId),
   ])
 }
