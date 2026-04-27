@@ -3,7 +3,7 @@ import type {
   FlashcardFreeformWidget,
   FlashcardFreeformResult,
 } from '../../shared/types/widgets'
-import { pickVocab, updateSm2, newId, type ToolContext, type ToolRegistration, type Env } from './shared'
+import { pickVocab, updateSm2, ensureGlossesAndDistractors, newId, type ToolContext, type ToolRegistration, type VocabCard, type Env } from './shared'
 
 const WIDGET_TIMEOUT_MS = 300_000
 
@@ -50,26 +50,19 @@ async function executeFlashcardFreeform(
     return `No vocabulary available for ${targetLang.english}. Try a different CEFR level.`
   }
 
+  await ensureGlossesAndDistractors(env, vocabCards, targetLang.code)
+
   const vc = vocabCards[0]
   const vocabRow = await env.DB
     .prepare("SELECT id, gloss_en FROM vocab_items WHERE lemma = ? AND language = ? AND source = 'goethe' LIMIT 1")
     .bind(vc.lemma, targetLang.code)
     .first<{ id: number; gloss_en: string | null }>()
 
-  let resolvedGloss = vocabRow?.gloss_en
-  if (!resolvedGloss) {
-    await ensureGloss(env, vc.lemma, vc.article, targetLang.code)
-    const refreshed = await env.DB
-      .prepare("SELECT id, gloss_en FROM vocab_items WHERE lemma = ? AND language = ? AND source = 'goethe' LIMIT 1")
-      .bind(vc.lemma, targetLang.code)
-      .first<{ id: number; gloss_en: string | null }>()
-    if (!refreshed || !refreshed.gloss_en) {
-      return `Unable to generate gloss for ${vc.lemma}. Please try again.`
-    }
-    resolvedGloss = refreshed.gloss_en
+  if (!vocabRow?.gloss_en) {
+    return `Unable to generate gloss for ${vc.lemma}. Please try again.`
   }
 
-  const correctAnswer = resolvedGloss
+  const correctAnswer = vocabRow.gloss_en
   const word = vc.article ? `${vc.article} ${vc.lemma}` : vc.lemma
   const widgetId = newId()
 
@@ -236,42 +229,4 @@ Is the user's answer semantically equivalent? Answer with JSON:
   }
 }
 
-async function ensureGloss(
-  env: Env,
-  lemma: string,
-  article: string | null,
-  langCode: string,
-): Promise<void> {
-  const row = await env.DB
-    .prepare("SELECT id FROM vocab_items WHERE lemma = ? AND language = ? AND source = 'goethe' LIMIT 1")
-    .bind(lemma, langCode)
-    .first<{ id: number }>()
-
-  if (!row) return
-
-  console.log(`[iris] generating gloss for ${lemma}`)
-  const wordStr = article ? `${article} ${lemma}` : lemma
-
-  const glossClient = new Anthropic({ apiKey: env.ANTHROPIC_API_KEY })
-  const response = await glossClient.messages.create({
-    model: 'claude-haiku-4-5',
-    max_tokens: 256,
-    messages: [
-      {
-        role: 'user',
-        content: `Provide a short English gloss (1-3 words, like a dictionary entry) for the German word: ${wordStr}
-Format: just the gloss, no extra text.`,
-      },
-    ],
-  })
-
-  const gloss = response.content
-    .filter((b): b is Anthropic.TextBlock => b.type === 'text')
-    .map((b) => b.text.trim())
-    .join('')
-
-  if (gloss) {
-    await env.DB.prepare('UPDATE vocab_items SET gloss_en = ? WHERE id = ?').bind(gloss, row.id).run()
-    console.log(`[iris] cached gloss for ${lemma}: ${gloss}`)
-  }
-}
+// ensureGloss removed — using shared ensureGlossesAndDistractors instead

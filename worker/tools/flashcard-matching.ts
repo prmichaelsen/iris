@@ -5,7 +5,7 @@ import type {
   FlashcardMatchingCardResult,
   FlashcardMatchingAnswer,
 } from '../../shared/types/widgets'
-import { pickVocab, updateSm2, newId, type ToolContext, type ToolRegistration, type VocabCard, type Env } from './shared'
+import { pickVocab, updateSm2, ensureGlossesAndDistractors, newId, type ToolContext, type ToolRegistration, type VocabCard, type Env } from './shared'
 
 const WIDGET_TIMEOUT_MS = 300_000
 
@@ -184,87 +184,4 @@ async function executeFlashcard(
   return `User scored ${correctCount}/${cards.length}: ${summary}`
 }
 
-async function ensureGlossesAndDistractors(
-  env: Env,
-  vocabCards: VocabCard[],
-  langCode: string,
-): Promise<void> {
-  const needsGloss: { id: number; lemma: string; article: string | null }[] = []
-  for (const vc of vocabCards) {
-    const row = await env.DB
-      .prepare("SELECT id, gloss_en FROM vocab_items WHERE lemma = ? AND language = ? AND source = 'goethe' LIMIT 1")
-      .bind(vc.lemma, langCode)
-      .first<{ id: number; gloss_en: string | null }>()
-    if (!row) continue
-    if (!row.gloss_en) {
-      needsGloss.push({ id: row.id, lemma: vc.lemma, article: vc.article })
-      continue
-    }
-    const dCount = await env.DB
-      .prepare('SELECT COUNT(*) AS c FROM vocab_distractors WHERE vocab_item_id = ?')
-      .bind(row.id)
-      .first<{ c: number }>()
-    if (!dCount || dCount.c < 3) {
-      needsGloss.push({ id: row.id, lemma: vc.lemma, article: vc.article })
-    }
-  }
-
-  if (needsGloss.length === 0) return
-
-  console.log(`[iris] generating glosses + distractors for ${needsGloss.length} words`)
-  const wordList = needsGloss
-    .map((w) => `${w.id}|${w.article ? w.article + ' ' : ''}${w.lemma}`)
-    .join('\n')
-
-  const glossClient = new Anthropic({ apiKey: env.ANTHROPIC_API_KEY })
-  const response = await glossClient.messages.create({
-    model: 'claude-haiku-4-5',
-    max_tokens: 4096,
-    messages: [
-      {
-        role: 'user',
-        content: `For each German word, provide:
-1. A short English gloss (1-3 words, like a dictionary entry)
-2. Three plausible-but-wrong English distractors (similar category/difficulty, 1-3 words each)
-
-Format each line as: ID|gloss|distractor1|distractor2|distractor3
-No extra text, just the lines.
-
-Example:
-123|greeting|farewell|question|answer
-456|departure|arrival|entrance|delay
-
-Words:
-${wordList}`,
-      },
-    ],
-  })
-
-  const text = response.content
-    .filter((b): b is Anthropic.TextBlock => b.type === 'text')
-    .map((b) => b.text)
-    .join('')
-
-  for (const line of text.split('\n')) {
-    const parts = line.trim().split('|')
-    if (parts.length < 4) continue
-    const id = parseInt(parts[0], 10)
-    if (isNaN(id)) continue
-    const gloss = parts[1].trim()
-    const d1 = parts[2]?.trim()
-    const d2 = parts[3]?.trim()
-    const d3 = parts[4]?.trim()
-
-    if (gloss) {
-      await env.DB.prepare('UPDATE vocab_items SET gloss_en = ? WHERE id = ?').bind(gloss, id).run()
-    }
-    for (const d of [d1, d2, d3]) {
-      if (d) {
-        await env.DB
-          .prepare('INSERT OR IGNORE INTO vocab_distractors (vocab_item_id, distractor_en) VALUES (?, ?)')
-          .bind(id, d).run().catch(() => {})
-      }
-    }
-  }
-  console.log(`[iris] cached glosses + distractors for ${needsGloss.length} words`)
-}
+// ensureGlossesAndDistractors is now in shared.ts

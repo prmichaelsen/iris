@@ -1,46 +1,65 @@
-// Generate English word-level glosses for vocab items using Claude.
-// Run: ANTHROPIC_API_KEY=... npx tsx scripts/seed/glosses.ts
-// Writes directly to remote D1 via wrangler.
+// Populate gloss_en for all vocab items using Claude Haiku.
+// Run: npx tsx scripts/seed/glosses.ts
+// Requires: ANTHROPIC_API_KEY in env (from .zshrc)
+// Updates ALL rows for each lemma (handles duplicates across CEFR levels).
 
 import Anthropic from '@anthropic-ai/sdk'
 import { execSync } from 'node:child_process'
+import { writeFileSync } from 'node:fs'
 
 const BATCH_SIZE = 80
 const client = new Anthropic()
 
-async function main() {
-  // Fetch all vocab items without glosses
+function d1Query(sql: string): any[] {
+  const escaped = sql.replace(/"/g, '\\"')
   const raw = execSync(
-    `npx wrangler d1 execute iris --remote --command "SELECT id, lemma, article, cefr_level FROM vocab_items WHERE gloss_en IS NULL ORDER BY cefr_level, lemma" --json`,
+    `npx wrangler d1 execute iris --remote --command "${escaped}" --json`,
     { encoding: 'utf-8', maxBuffer: 10 * 1024 * 1024 },
   )
-  const parsed = JSON.parse(raw)
-  const rows: { id: number; lemma: string; article: string | null; cefr_level: string }[] =
-    parsed[0]?.results ?? []
+  return JSON.parse(raw)[0]?.results ?? []
+}
 
-  console.error(`${rows.length} words need glosses`)
+function d1File(path: string): void {
+  execSync(`npx wrangler d1 execute iris --remote --file ${path}`, {
+    encoding: 'utf-8',
+    maxBuffer: 10 * 1024 * 1024,
+  })
+}
+
+async function main() {
+  const rows = d1Query(
+    `SELECT DISTINCT lemma, article FROM vocab_items WHERE gloss_en IS NULL AND language = 'deu' ORDER BY lemma`,
+  ) as { lemma: string; article: string | null }[]
+
+  console.error(`${rows.length} unique lemmas need glosses`)
   if (rows.length === 0) return
+
+  let totalUpdated = 0
 
   for (let i = 0; i < rows.length; i += BATCH_SIZE) {
     const batch = rows.slice(i, i + BATCH_SIZE)
     const wordList = batch
-      .map((r) => `${r.id}|${r.article ? r.article + ' ' : ''}${r.lemma}`)
+      .map((r) => `${r.article ? r.article + ' ' : ''}${r.lemma}`)
       .join('\n')
 
-    console.error(`Batch ${Math.floor(i / BATCH_SIZE) + 1}: ${batch.length} words (${i}–${i + batch.length - 1})`)
+    console.error(
+      `Batch ${Math.floor(i / BATCH_SIZE) + 1}/${Math.ceil(rows.length / BATCH_SIZE)}: ${batch.length} words`,
+    )
 
     const response = await client.messages.create({
-      model: 'claude-sonnet-4-6',
+      model: 'claude-haiku-4-5',
       max_tokens: 4096,
       messages: [
         {
           role: 'user',
-          content: `For each German word below, provide a SHORT English gloss (1-3 words max, like a dictionary entry). Format: one line per word, "ID|gloss". No articles, no explanations, just the core meaning.
+          content: `For each German word below, provide a short English gloss (1-3 words, like a dictionary entry).
+Format: one line per word, exactly "WORD|GLOSS". No extra text, no numbering.
 
 Examples:
-123|greeting
-456|departure
-789|to work
+der Gruß|greeting
+kaufen|to buy
+aber|but
+schnell|fast
 
 Words:
 ${wordList}`,
@@ -53,32 +72,48 @@ ${wordList}`,
       .map((b) => b.text)
       .join('')
 
-    // Parse response and build SQL
     const updates: string[] = []
     for (const line of text.split('\n')) {
-      const match = line.match(/^(\d+)\|(.+)$/)
-      if (!match) continue
-      const id = match[1]
-      const gloss = match[2].trim().replace(/'/g, "''")
-      updates.push(`UPDATE vocab_items SET gloss_en = '${gloss}' WHERE id = ${id};`)
+      const pipeIdx = line.indexOf('|')
+      if (pipeIdx === -1) continue
+      const wordPart = line.slice(0, pipeIdx).trim()
+      const gloss = line.slice(pipeIdx + 1).trim()
+      if (!gloss) continue
+
+      let lemma = wordPart
+      for (const art of ['der ', 'die ', 'das ']) {
+        if (lemma.toLowerCase().startsWith(art)) {
+          lemma = lemma.slice(art.length)
+          break
+        }
+      }
+
+      const eg = gloss.replace(/'/g, "''")
+      const el = lemma.replace(/'/g, "''")
+      updates.push(
+        `UPDATE vocab_items SET gloss_en = '${eg}' WHERE lemma = '${el}' AND language = 'deu' AND gloss_en IS NULL;`,
+      )
     }
 
     if (updates.length > 0) {
-      const sql = updates.join('\n')
-      const tmpFile = `/tmp/glosses_batch_${i}.sql`
-      require('node:fs').writeFileSync(tmpFile, sql)
-      execSync(`npx wrangler d1 execute iris --remote --file ${tmpFile}`, {
-        encoding: 'utf-8',
-        maxBuffer: 10 * 1024 * 1024,
-      })
-      console.error(`  → Updated ${updates.length} glosses`)
+      const tmpFile = `/tmp/iris_glosses_batch_${i}.sql`
+      writeFileSync(tmpFile, updates.join('\n'))
+      d1File(tmpFile)
+      totalUpdated += updates.length
+      console.error(`  → ${updates.length} glosses written`)
     }
 
-    // Small delay between batches
-    if (i + BATCH_SIZE < rows.length) await new Promise((r) => setTimeout(r, 1000))
+    if (i + BATCH_SIZE < rows.length) {
+      await new Promise((r) => setTimeout(r, 500))
+    }
   }
 
-  console.error('Done!')
+  const remaining = d1Query(
+    `SELECT COUNT(*) AS c FROM vocab_items WHERE gloss_en IS NULL AND language = 'deu'`,
+  ) as { c: number }[]
+  console.error(
+    `\nDone. ${totalUpdated} glosses written. ${remaining[0]?.c ?? '?'} still missing.`,
+  )
 }
 
 main().catch((err) => {

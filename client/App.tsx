@@ -29,6 +29,7 @@ import type {
   ContentBlock,
   Widget,
 } from '../shared/types/widgets'
+import { isJson } from '../shared/utils'
 
 type Status = 'connecting' | 'reconnecting' | 'idle' | 'listening' | 'thinking' | 'speaking' | 'error'
 
@@ -421,7 +422,7 @@ export default function App({ user, signOut }: AppProps) {
                     </button>
                   )}
                 </div>
-                {turn.text && !turn.text.startsWith('[{') && <div className="text">{turn.text}</div>}
+                {turn.text && !isJson(turn.text) && <div className="text">{turn.text}</div>}
                 {turn.widgets?.map((wt) => {
                   const isActive = activeWidget?.widget_id === wt.widget.widget_id
 

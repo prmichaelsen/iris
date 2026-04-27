@@ -5,6 +5,7 @@ import type {
   WidgetContentBlock,
   ContentBlock,
 } from '../shared/types/widgets'
+import { isJson } from '../shared/utils'
 import {
   clearSessionCookieHeader,
   createSession,
@@ -386,7 +387,7 @@ async function handleWebSocket(request: Request, env: Env): Promise<Response> {
           role: m.role,
           text: m.content_blocks
             ? m.content_blocks.filter((b): b is import('../shared/types/widgets').TextContentBlock => b.type === 'text').map((b) => b.text).join('')
-            : m.content,
+            : (isJson(m.content) ? '' : m.content),
           content_blocks: m.content_blocks,
         })),
       }),
