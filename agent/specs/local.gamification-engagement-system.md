@@ -100,7 +100,7 @@ Each character MUST track: first meeting date & user level, last visit date & us
 All revisitable characters MUST use a generic relationship system with scoring (0-100), tier-based behaviors, and character-specific metadata. Each character is a mini-game with unique specialty: Karl (speed/impatience), Lena (slang/casual), Henrik (grammar precision + vocabulary sophistication).
 
 ### R15a: Karl's Multi-Region Arc
-Karl der Bäcker MUST be a recurring benchmark character with 6 content-triggered discovery quests (one per region after Berlin), voice-only 5-second timer conversations, and metadata tracking regional bread discussions.
+Karl der Bäcker MUST be a recurring benchmark character with 6 content-triggered discovery quests (one per region after Berlin), 5-second timer conversations with 3-strikes failure, and metadata tracking regional bread discussions. Note: All Iris conversations are voice-only by default; Karl's distinguishing feature is the timer pressure system.
 
 ### R16: Fast Relationship Progression
 Karl's relationship MUST progress quickly: +10 for perfect (9-10/10), +8 excellent, +6 good, +4 okay, +2 rough, -3 poor, -8 terrible. Target: 8-10 perfect visits to reach 100.
@@ -114,17 +114,19 @@ Each character MUST have unique grading weights matching their specialty:
 - **Lena** (slang/casual): comprehension 15%, fluency 20%, grammar 5%, vocabulary 10%, pronunciation 15%, confidence 20%, cultural_awareness 15%
 - **Henrik** (grammar + vocabulary): comprehension 20%, fluency 10%, grammar 30%, vocabulary 30%, pronunciation 5%, confidence 5%, cultural_awareness 0%
 
-### R18a: Adaptive Character Difficulty
-All 9 characters (Karl + 8 pen pals) MUST have unique adaptive difficulty progressions based on relationship tier:
-- **Karl**: Idiom evolution (literal → common idioms → Berlin-specific idioms)
-- **Mila**: Art vocabulary (simple → critique vocabulary + metaphors + street slang mix)
-- **Thomas**: Spatial language (simple directions → complex spatial relations + Bavarian dialect) + faster speech in exciting situations
-- **Lena**: Slang progression (standard casual → heavy Hamburg slang with contractions)
-- **Klaus**: Sensory language (basic wine terms → sophisticated sensory vocabulary + subjunctive mood + philosophical metaphors)
-- **Emma**: Dual vocabulary (basic fairy tale → Grimm archaic + technical clockwork terms + mixed phrasing)
-- **Henrik**: Academic rigor (simple academic → philosophical vocabulary + perfect grammar expectations) - gets HARDER at high tiers (inverse)
-- **Sophie**: Austrian formality (standard polite → Viennese courtly + Austrian lexical differences + diminutive escalation)
-- **Marco**: Code-switching (Hochdeutsch → Swiss German/French/Italian mixing + perfectionist precision)
+### R18a: Adaptive Character Difficulty & Voice Characteristics
+All 9 characters (Karl + 8 pen pals) MUST have unique adaptive difficulty progressions based on relationship tier AND character-specific voice_id for TTS that matches their regional accent and personality:
+- **Karl der Bäcker**: Berlin male fast dialect voice, idiom evolution (literal → common idioms → Berlin-specific idioms)
+- **Mila**: Berlin female creative voice, art vocabulary (simple → critique vocabulary + metaphors + street slang mix)
+- **Thomas**: Bavarian male warm voice, spatial language (simple directions → complex spatial relations + Bavarian dialect) + faster speech in exciting situations
+- **Lena**: Hamburg female tough voice, slang progression (standard casual → heavy Hamburg slang with contractions)
+- **Klaus**: Rhine Valley male mature voice, sensory language (basic wine terms → sophisticated sensory vocabulary + subjunctive mood + philosophical metaphors)
+- **Emma**: Black Forest female storyteller voice, dual vocabulary (basic fairy tale → Grimm archaic + technical clockwork terms + mixed phrasing)
+- **Henrik**: Saxony male academic voice, academic rigor (simple academic → philosophical vocabulary + perfect grammar expectations) - gets HARDER at high tiers (inverse)
+- **Sophie**: Austrian female formal voice, Austrian formality (standard polite → Viennese courtly + Austrian lexical differences + diminutive escalation)
+- **Marco**: Swiss male multilingual voice, code-switching (Hochdeutsch → Swiss German/French/Italian mixing + perfectionist precision)
+
+When user activates a quest featuring a character, the system MUST switch the TTS voice_id to that character's voice for all assistant responses until the quest completes.
 
 ### R18b: OpenAPI Specification Required
 Before implementing Phase 2+, the project MUST adopt OpenAPI 3.0+ specification for all API endpoints with code generation via openapi-generator or similar tooling. All endpoints in this spec MUST be formally defined in `openapi.yaml` with request/response schemas, error codes, and authentication requirements.
@@ -412,6 +414,7 @@ interface Character {
   personality: string;
   specialty: string; // 'speed_impatience', 'slang_casual', 'grammar_precision', 'vocabulary_academic', 'cultural_context'
   language_style: string; // 'fast_berlin_dialect', 'patient', etc.
+  voice_id: string; // ElevenLabs voice ID for this character's TTS
   voice_characteristics: string[];
   grading_weights: {
     comprehension: number;
@@ -536,7 +539,67 @@ interface FairyTaleTurn {
 }
 ```
 
-### API Endpoints
+### MCP Tools (Claude Conversation Interface)
+
+Following Anthropic best practices, domain-scoped operations are consolidated into single tools with action parameters rather than many small tools.
+
+```typescript
+// Regions Tool - All region operations
+{
+  name: "regions",
+  input: {
+    action: "list" | "travel" | "info"
+    region_id?: string  // required for "travel" and "info"
+  }
+}
+// "list" returns all regions with {id, name, unlocked: bool, completed: bool}
+// "travel" sets current_region in session state
+// "info" returns detailed region info (quests, fotos, voice, completion status)
+
+// Quests Tool - All quest operations
+{
+  name: "quests",
+  input: {
+    action: "list" | "activate" | "complete" | "details"
+    quest_id?: string   // required for "activate", "complete", "details"
+    region_id?: string  // optional for "list" (filters by region)
+  }
+}
+// "list" returns available quests (optionally filtered by region)
+// "activate" starts quest, switches active_character + voice_id, returns quest intro in character voice
+// "complete" ends quest, switches back to Iris + Iris voice_id
+// "details" returns full quest info (description, requirements, rewards)
+
+// Context Tool - Set user location and character (M9 tool, retained)
+{
+  name: "set_context",
+  input: {
+    user_id: string
+    location?: "berlin" | "bavaria" | "hamburg" | "rhine" | "blackforest" | "saxony" | "austria" | "switzerland"
+    character_id?: string
+  }
+}
+
+// Progress Tool - View user progress (M9 tool, retained)
+{
+  name: "view_progress",
+  input: {
+    user_id: string
+    detail_level: "summary" | "full"
+  }
+}
+
+// Debug Tool - Admin inspection of DB state (M9 tool, retained)
+{
+  name: "debug_state",
+  input: {
+    user_id: string
+    tables?: string[]
+  }
+}
+```
+
+### API Endpoints (HTTP REST Interface)
 
 ```typescript
 // Progress
@@ -580,12 +643,7 @@ GET /api/collectibles/:penPalId/collection
 // Characters
 GET /api/characters/:characterId/info
 POST /api/characters/:characterId/visit
-POST /api/characters/:characterId/conversation (body: { transcript: string })
-
-// Karl
-GET /api/karl/:userId
-POST /api/karl/visit
-POST /api/karl/conversation (body: { transcript: string, response_time_ms: number })
+POST /api/characters/:characterId/conversation (body: { transcript: string, response_time_ms?: number })
 
 // Iris
 POST /api/iris/suggest-quest (body: { context: string })
@@ -791,10 +849,12 @@ POST /api/lootbox/open
 
 **Step 22: Karl First Encounter (Berlin)**
 - "Erste Bestellung" quest appears in Tier 1 Berlin quests
-- User visits Karl's bakery
-- Voice-only conversation with 5-second timer per response
-- 3 timeouts = kicked out, can retry
+- User activates quest via `quests` tool with action="activate", quest_id="erste_bestellung"
+- System switches active_character to Karl and voice_id to Berlin male fast dialect
+- Conversation begins with 5-second timer per response (UI countdown indicator)
+- 3 timeouts = kicked out ("NÄCHSTER!"), can retry immediately
 - Success = relationship 30/100, basic bakery vocab unlocked
+- Quest completion switches back to Iris + Iris voice_id
 
 **Step 23: Claude Grading**
 - Send conversation transcript + response times to Claude
