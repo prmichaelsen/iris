@@ -38,7 +38,10 @@ export interface LetterGenerationInput {
   /** User's German level (A1, A2, B1, etc.) */
   cefr_level?: string
 
-  /** Occasion or trigger for this letter (e.g., 'first_contact', 'gift_attached', 'responding_to_user') */
+  /**
+   * Occasion or trigger for this letter.
+   * Spec-aligned values: 'first_contact', 'gift_attached', 'reconnect', 'check_in'.
+   */
   occasion?: string
 
   /** Gift being attached (if any) */
@@ -121,8 +124,8 @@ Letter guidelines:
     prompt += `\nOccasion: This is your FIRST letter to ${userName}. Introduce yourself warmly, explain how you got their address (through a mutual friend who runs a language exchange program), and share why you're excited to be pen pals. Mention what you hope to talk about.`
   } else if (occasion === 'gift_attached') {
     prompt += `\nOccasion: You're sending a small gift with this letter! The gift is: ${gift?.name_en} — ${gift?.description_en}. Explain what it is, why you thought of them, and what it means to you.`
-  } else if (occasion === 'responding_to_user') {
-    prompt += `\nOccasion: You're responding to a letter from ${userName}. Reference something they mentioned (be creative — imagine they told you about their week). Show genuine interest and share a related story from your own life.`
+  } else if (occasion === 'reconnect') {
+    prompt += `\nOccasion: You're reaching out again to ${userName} after it's been quiet for a while. Acknowledge gently that some time has passed since you last heard from each other, don't guilt-trip them, share something new from your life, and invite them back into the conversation with an open question.`
   } else {
     // Default: casual check-in
     prompt += `\nOccasion: Just checking in with ${userName}. Share something interesting that happened recently in your life or region.`
@@ -162,7 +165,7 @@ export function determineOccasion(
     return 'gift_attached'
   }
   if (letters_received % 3 === 0) {
-    return 'responding_to_user'
+    return 'reconnect'
   }
   return 'check_in'
 }

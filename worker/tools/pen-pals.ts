@@ -269,6 +269,9 @@ export const checkPenPalAttentionTool: ToolRegistration = {
       const score = calculateAttentionScore({
         letters_sent: relationship.letters_sent,
         letters_read: relationship.letters_received, // Approximate: received ≈ read
+        // TODO(M11): wire up recommendations_engaged once the engagement-tracking
+        // table exists. For M10 we pass 0 so the formula still includes the term.
+        engaged_count: 0,
         days_since_last: daysSinceLast,
       })
 

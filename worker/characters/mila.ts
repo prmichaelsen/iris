@@ -11,10 +11,35 @@ export const mila: Character = {
   id: 'mila',
   name: 'Mila',
   age: 27,
-  region: 'berlin',
+  region_id: 'region_berlin',
+  profession_de: 'Straßenkünstlerin',
+  profession_en: 'Street Artist',
   personality: 'Creative, chaotic, passionate about street art and underground culture',
   specialty: 'Creative/Artistic Expression',
-  voice_id: 'EXAVITQu4vr4xnSDxMaL', // Berlin female creative voice from ElevenLabs (Bella)
+  language_style: 'berlin_creative',
+
+  // Bella — Berlin female creative voice from ElevenLabs.
+  voice_id: 'EXAVITQu4vr4xnSDxMaL',
+  voice_characteristics: ['female', 'creative', 'energetic', 'berlin'],
+
+  // Matches db/seeds/003_characters.sql exactly.
+  grading_weights: {
+    vocabulary: 0.25,
+    cultural_awareness: 0.15,
+    grammar: 0.15,
+    comprehension: 0.15,
+    fluency: 0.15,
+    confidence: 0.10,
+    pronunciation: 0.05,
+  },
+  tier_thresholds: [20, 40, 60, 80, 100],
+  tier_names: ['strangers', 'acquaintances', 'friends', 'close_friends', 'best_friends'],
+  difficulty_scaling: {
+    base_difficulty: 4,
+    increases_with_relationship: true,
+    adaptive_vocabulary: true,
+    adaptive_grammar: false,
+  },
 
   additional_instructions: `You are Mila, a 27-year-old street artist from Berlin. You're passionate about art, underground culture, and expressing yourself creatively.
 

@@ -6,6 +6,7 @@ import { calculateRelationshipDelta } from '../relationship'
 import { gradeConversation, type GradingWeights } from '../grading'
 import { getCharacter } from '../characters'
 import { updateSessionCharacterState } from '../session-state'
+import { maybeUnlockPenPalForQuest } from './pen-pal-unlock'
 
 // Valid region IDs
 const VALID_REGIONS = [
@@ -580,6 +581,15 @@ async function completeQuest(ctx: ToolContext, questId: string): Promise<string>
       .bind(newId(), userId, questRow.id)
       .run()
       .catch((err) => console.warn('[quests.complete] user_quests upsert failed:', err))
+  }
+
+  // Pen pal unlock flow (spec R10): Tier 2 quest completion unlocks the
+  // associated pen pal and schedules a first "pending" letter within 24h.
+  // Idempotent via INSERT OR IGNORE. Generic by convention on quest_id.
+  try {
+    await maybeUnlockPenPalForQuest(env.DB, userId, questRow?.id ?? questId)
+  } catch (err) {
+    console.warn('[quests.complete] pen pal unlock failed:', err)
   }
 
   // Switch session state back to Iris (keep current_region)

@@ -4,7 +4,8 @@
  * Calculates how frequently pen pals send letters based on user engagement.
  * Higher attention score = more frequent letters.
  *
- * Formula: (letters_sent * 3) + (letters_read * 1) - (days_since_last * 0.5)
+ * Formula (per spec R12):
+ *   (letters_sent * 3) + (letters_read * 1) + (recommendations_engaged * 2) - (days_since_last * 0.5)
  *
  * Score ranges map to letter frequency:
  * - <10: 1 letter every 14 days
@@ -22,6 +23,13 @@ export interface AttentionScoreInput {
 
   /** Number of letters user has read from this pen pal */
   letters_read: number
+
+  /**
+   * Number of recommendations (books/films/music) the user has engaged with.
+   * Weighted 2x per spec R12. Defaults to 0 when no engagement-tracking
+   * table exists yet (M10 placeholder; full tracking lands with M11).
+   */
+  engaged_count?: number
 
   /** Days since last interaction (letter sent or read) */
   days_since_last: number
@@ -46,9 +54,14 @@ export interface LetterFrequency {
  */
 export function calculateAttentionScore(input: AttentionScoreInput): number {
   const { letters_sent, letters_read, days_since_last } = input
+  const engaged_count = input.engaged_count ?? 0
 
-  // Formula: engagement gains - recency penalty
-  const score = (letters_sent * 3) + (letters_read * 1) - (days_since_last * 0.5)
+  // Formula (spec R12): engagement gains - recency penalty
+  const score =
+    (letters_sent * 3) +
+    (letters_read * 1) +
+    (engaged_count * 2) -
+    (days_since_last * 0.5)
 
   // Floor at 0 (negative scores don't make sense)
   return Math.max(0, score)

@@ -73,9 +73,9 @@ describe('generateLetter', () => {
     expect(determineOccasion(5, true)).toBe('gift_attached')
   })
 
-  it('uses responding_to_user every 3rd letter', () => {
-    expect(determineOccasion(3, false)).toBe('responding_to_user')
-    expect(determineOccasion(6, false)).toBe('responding_to_user')
+  it('uses reconnect every 3rd letter (spec R10 reconnect occasion)', () => {
+    expect(determineOccasion(3, false)).toBe('reconnect')
+    expect(determineOccasion(6, false)).toBe('reconnect')
   })
 
   it('defaults to check_in for casual letters', () => {

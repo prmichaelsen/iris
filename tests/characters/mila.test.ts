@@ -11,8 +11,19 @@ describe('Mila character definition', () => {
   })
 
   it('has Berlin region and creative specialty', () => {
-    expect(mila.region).toBe('berlin')
+    expect(mila.region_id).toBe('region_berlin')
     expect(mila.specialty).toMatch(/creative/i)
+  })
+
+  it('conforms to the updated Character type (profession, grading_weights, tiers, difficulty)', () => {
+    expect(mila.profession_de).toBe('Straßenkünstlerin')
+    expect(mila.profession_en).toBe('Street Artist')
+    expect(mila.grading_weights).toBeDefined()
+    expect(mila.grading_weights!.vocabulary).toBeCloseTo(0.25, 5)
+    expect(mila.tier_thresholds).toEqual([20, 40, 60, 80, 100])
+    expect(mila.tier_names).toHaveLength(5)
+    expect(mila.difficulty_scaling?.base_difficulty).toBe(4)
+    expect(mila.difficulty_scaling?.increases_with_relationship).toBe(true)
   })
 
   it('uses the Bella ElevenLabs voice id', () => {
@@ -42,7 +53,8 @@ describe('Mila grading weights (from seed)', () => {
   it('matches the spec weights', () => {
     expect(weights.vocabulary).toBeCloseTo(0.25, 5)
     expect(weights.cultural_awareness).toBeCloseTo(0.15, 5)
-    expect(weights.grammar).toBeCloseTo(0.2, 5)
+    expect(weights.grammar).toBeCloseTo(0.15, 5)
+    expect(weights.pronunciation).toBeCloseTo(0.05, 5)
     expect(weights.comprehension).toBeCloseTo(0.15, 5)
     expect(weights.fluency).toBeCloseTo(0.15, 5)
     expect(weights.confidence).toBeCloseTo(0.1, 5)
