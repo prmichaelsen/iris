@@ -339,7 +339,9 @@ async function handleWebSocket(request: Request, env: Env): Promise<Response> {
             .run()
         } else if (msg.type === 'widget_response' && pendingWidget.widgetId === msg.widget_id && pendingWidget.resolve) {
           if (pendingWidget.timer) clearTimeout(pendingWidget.timer)
-          pendingWidget.resolve(msg.answers ?? [])
+          // Handle both array answers (matching/gender-pick) and single answer (freeform)
+          const payload = msg.answer !== undefined ? msg.answer : (msg.answers ?? [])
+          pendingWidget.resolve(payload)
           pendingWidget.resolve = null
           pendingWidget.reject = null
           pendingWidget.timer = null

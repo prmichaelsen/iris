@@ -25,10 +25,10 @@ export interface VocabCard {
 
 export interface PendingWidget {
   widgetId: string | null
-  resolve: ((answers: FlashcardMatchingAnswer[]) => void) | null
+  resolve: ((answers: any) => void) | null
   reject: ((reason: string) => void) | null
   timer: ReturnType<typeof setTimeout> | null
-  correctMap: Map<string, { correct_index: number; correct_answer: string; word: string }>
+  correctMap: Map<string, any>
 }
 
 export interface ToolContext {

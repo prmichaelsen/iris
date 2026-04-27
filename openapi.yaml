@@ -1,0 +1,846 @@
+openapi: 3.0.3
+info:
+  title: Iris Gamification API
+  description: |
+    API for Iris language learning gamification system.
+    Covers progress tracking, quests, badges, points, map progression,
+    character relationships, pen pals, and photo collections.
+  version: 0.10.0
+  contact:
+    name: Iris Development Team
+
+servers:
+  - url: http://localhost:8787
+    description: Local development
+  - url: https://iris.prmichaelsen.workers.dev
+    description: Production (Cloudflare Workers)
+
+security:
+  - BearerAuth: []
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      description: User authentication token
+
+  schemas:
+    # ============================================================================
+    # Core Progress & Quests (Task 1)
+    # ============================================================================
+
+    UserProgress:
+      type: object
+      required:
+        - user_id
+        - level
+        - xp_current
+        - xp_to_next_level
+        - created_at
+        - updated_at
+      properties:
+        user_id:
+          type: string
+          description: User identifier
+        level:
+          type: integer
+          minimum: 1
+          description: Current user level
+        xp_current:
+          type: integer
+          minimum: 0
+          description: XP earned in current level
+        xp_to_next_level:
+          type: integer
+          minimum: 1
+          description: XP required to reach next level
+        created_at:
+          type: string
+          format: date-time
+          description: ISO 8601 timestamp
+        updated_at:
+          type: string
+          format: date-time
+          description: ISO 8601 timestamp
+
+    Quest:
+      type: object
+      required:
+        - id
+        - name_de
+        - name_en
+        - description_de
+        - description_en
+        - category
+        - points_reward
+        - is_repeatable
+        - is_hidden
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Quest identifier
+        name_de:
+          type: string
+          description: Quest name in German
+        name_en:
+          type: string
+          description: Quest name in English
+        description_de:
+          type: string
+          description: Quest description in German
+        description_en:
+          type: string
+          description: Quest description in English
+        category:
+          type: string
+          enum: [skill, achievement, streak, hidden, lesson, cultural, meta]
+          description: Quest category
+        badge_skill:
+          type: string
+          nullable: true
+          description: Associated skill badge (e.g., 'flashcard', 'dictation')
+        tier_thresholds:
+          type: array
+          items:
+            type: integer
+          description: Thresholds for badge tiers (e.g., [10, 50, 100, 500, 1000])
+        points_reward:
+          type: integer
+          minimum: 0
+          description: Points awarded on completion
+        is_repeatable:
+          type: boolean
+          description: Whether quest can be completed multiple times
+        is_hidden:
+          type: boolean
+          description: Whether quest is hidden until unlocked
+
+    UserQuest:
+      type: object
+      required:
+        - id
+        - user_id
+        - quest_id
+        - progress
+        - completed
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: User quest instance identifier
+        user_id:
+          type: string
+          description: User identifier
+        quest_id:
+          type: string
+          format: uuid
+          description: Quest identifier
+        progress:
+          type: integer
+          minimum: 0
+          description: Current progress count
+        completed:
+          type: boolean
+          description: Whether quest is completed
+        completed_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: ISO 8601 timestamp of completion
+        tier_unlocked:
+          type: string
+          enum: [grey, bronze, silver, gold, diamond, platinum]
+          nullable: true
+          description: Badge tier unlocked (if skill quest)
+
+    UserBadge:
+      type: object
+      required:
+        - user_id
+        - skill
+        - tier
+        - progress
+        - unlocked_at
+      properties:
+        user_id:
+          type: string
+          description: User identifier
+        skill:
+          type: string
+          description: Skill type (flashcard, dictation, grammar, etc.)
+        tier:
+          type: string
+          enum: [grey, bronze, silver, gold, diamond, platinum]
+          description: Badge tier
+        progress:
+          type: integer
+          minimum: 0
+          description: Count toward next tier
+        unlocked_at:
+          type: string
+          format: date-time
+          description: ISO 8601 timestamp
+
+    BadgeMetadata:
+      type: object
+      required:
+        - skill
+        - tier
+        - threshold
+        - name_de
+        - name_en
+        - description_de
+        - description_en
+      properties:
+        skill:
+          type: string
+          description: Skill type
+        tier:
+          type: string
+          enum: [grey, bronze, silver, gold, diamond, platinum]
+          description: Badge tier
+        threshold:
+          type: integer
+          minimum: 0
+          description: Count required to unlock this tier
+        name_de:
+          type: string
+          description: Badge name in German
+        name_en:
+          type: string
+          description: Badge name in English
+        description_de:
+          type: string
+          description: Badge description in German
+        description_en:
+          type: string
+          description: Badge description in English
+
+    XPAwardRequest:
+      type: object
+      required:
+        - user_id
+        - amount
+        - source
+      properties:
+        user_id:
+          type: string
+          description: User identifier
+        amount:
+          type: integer
+          minimum: 10
+          maximum: 50
+          description: XP amount to award (10-50)
+        source:
+          type: string
+          enum: [drill_complete, quest_complete, bonus]
+          description: Source of XP
+
+    XPAwardResponse:
+      type: object
+      required:
+        - user_id
+        - xp_awarded
+        - xp_current
+        - level
+        - level_up
+      properties:
+        user_id:
+          type: string
+        xp_awarded:
+          type: integer
+        xp_current:
+          type: integer
+        level:
+          type: integer
+        level_up:
+          type: boolean
+          description: Whether user leveled up
+        xp_to_next_level:
+          type: integer
+          description: XP needed for next level (if level_up occurred)
+
+    QuestProgressRequest:
+      type: object
+      required:
+        - user_id
+        - increment
+      properties:
+        user_id:
+          type: string
+        increment:
+          type: integer
+          minimum: 1
+          maximum: 100
+          description: Progress increment (1-100)
+
+    QuestCompleteResponse:
+      type: object
+      required:
+        - quest_id
+        - user_id
+        - completed
+        - points_awarded
+      properties:
+        quest_id:
+          type: string
+          format: uuid
+        user_id:
+          type: string
+        completed:
+          type: boolean
+        points_awarded:
+          type: integer
+        tier_unlocked:
+          type: string
+          enum: [grey, bronze, silver, gold, diamond, platinum]
+          nullable: true
+          description: Badge tier unlocked (if applicable)
+
+    BadgeProgressRequest:
+      type: object
+      required:
+        - user_id
+        - count
+      properties:
+        user_id:
+          type: string
+        count:
+          type: integer
+          minimum: 1
+          description: Number of completions to add
+
+    ErrorResponse:
+      type: object
+      required:
+        - code
+        - message
+      properties:
+        code:
+          type: string
+          description: Error code (e.g., 'INVALID_PARAMETER', 'QUEST_NOT_FOUND')
+        message:
+          type: string
+          description: Human-readable error message
+        details:
+          type: object
+          additionalProperties: true
+          description: Additional error context
+
+paths:
+  # ============================================================================
+  # Progress Tracking Endpoints
+  # ============================================================================
+
+  /api/progress/{userId}:
+    get:
+      summary: Get user progress
+      description: Returns user's current level, XP, and progress summary
+      operationId: getUserProgress
+      tags:
+        - Progress
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: User identifier
+      responses:
+        '200':
+          description: User progress retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserProgress'
+        '404':
+          description: User not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/progress/xp:
+    post:
+      summary: Award XP
+      description: Awards XP to user, handles level-up if threshold crossed
+      operationId: awardXP
+      tags:
+        - Progress
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/XPAwardRequest'
+      responses:
+        '200':
+          description: XP awarded successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/XPAwardResponse'
+        '400':
+          description: Invalid parameters
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: User not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/progress/mastery/{userId}:
+    get:
+      summary: Get mastery breakdown
+      description: Returns user's mastery scores by skill category
+      operationId: getUserMastery
+      tags:
+        - Progress
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: User identifier
+      responses:
+        '200':
+          description: Mastery breakdown retrieved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  user_id:
+                    type: string
+                  mastery:
+                    type: object
+                    additionalProperties:
+                      type: number
+                      format: float
+                      minimum: 0
+                      maximum: 100
+                    description: Map of skill → mastery percentage
+        '404':
+          description: User not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  # ============================================================================
+  # Quest System Endpoints
+  # ============================================================================
+
+  /api/quests/available/{userId}:
+    get:
+      summary: List available quests
+      description: Returns quests available to user (filtered by level/region)
+      operationId: getAvailableQuests
+      tags:
+        - Quests
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: region
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Filter by region (e.g., 'berlin', 'bavaria')
+        - name: category
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [skill, achievement, streak, hidden, lesson, cultural, meta]
+          description: Filter by quest category
+      responses:
+        '200':
+          description: Available quests retrieved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  quests:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Quest'
+        '404':
+          description: User not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/quests/active/{userId}:
+    get:
+      summary: List active quests
+      description: Returns user's in-progress quests
+      operationId: getActiveQuests
+      tags:
+        - Quests
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Active quests retrieved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  quests:
+                    type: array
+                    items:
+                      allOf:
+                        - $ref: '#/components/schemas/Quest'
+                        - type: object
+                          properties:
+                            progress:
+                              type: integer
+                            target:
+                              type: integer
+        '404':
+          description: User not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/quests/{questId}:
+    get:
+      summary: Get quest details
+      description: Returns detailed information about a quest
+      operationId: getQuest
+      tags:
+        - Quests
+      parameters:
+        - name: questId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Quest details retrieved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Quest'
+        '404':
+          description: Quest not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/quests/{questId}/progress:
+    post:
+      summary: Increment quest progress
+      description: Adds progress to a user's quest
+      operationId: incrementQuestProgress
+      tags:
+        - Quests
+      parameters:
+        - name: questId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/QuestProgressRequest'
+      responses:
+        '200':
+          description: Progress updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  quest_id:
+                    type: string
+                    format: uuid
+                  user_id:
+                    type: string
+                  progress:
+                    type: integer
+                  completed:
+                    type: boolean
+        '400':
+          description: Invalid parameters
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Quest or user not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: Quest not active for user
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/quests/{questId}/complete:
+    post:
+      summary: Complete quest
+      description: Marks quest as complete, awards points, checks badge tier unlock
+      operationId: completeQuest
+      tags:
+        - Quests
+      parameters:
+        - name: questId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - user_id
+              properties:
+                user_id:
+                  type: string
+      responses:
+        '200':
+          description: Quest completed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/QuestCompleteResponse'
+        '400':
+          description: Invalid parameters
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Quest or user not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: Quest already completed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  # ============================================================================
+  # Badge System Endpoints
+  # ============================================================================
+
+  /api/badges/{userId}:
+    get:
+      summary: List user badges
+      description: Returns all user badges with progress toward next tier
+      operationId: getUserBadges
+      tags:
+        - Badges
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Badges retrieved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  badges:
+                    type: array
+                    items:
+                      allOf:
+                        - $ref: '#/components/schemas/UserBadge'
+                        - type: object
+                          properties:
+                            threshold_next:
+                              type: integer
+                              description: Count required for next tier
+        '404':
+          description: User not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/badges/{skill}/progress:
+    post:
+      summary: Increment badge progress
+      description: Adds progress to user's badge (from drill completion)
+      operationId: incrementBadgeProgress
+      tags:
+        - Badges
+      parameters:
+        - name: skill
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Skill type (flashcard, dictation, etc.)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BadgeProgressRequest'
+      responses:
+        '200':
+          description: Badge progress updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  user_id:
+                    type: string
+                  skill:
+                    type: string
+                  tier:
+                    type: string
+                  progress:
+                    type: integer
+                  tier_unlocked:
+                    type: boolean
+                    description: Whether new tier was unlocked
+        '400':
+          description: Invalid parameters
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: User not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/badges/metadata:
+    get:
+      summary: Get badge metadata
+      description: Returns badge tier thresholds and names for all skills
+      operationId: getBadgeMetadata
+      tags:
+        - Badges
+      responses:
+        '200':
+          description: Badge metadata retrieved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  badges:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/BadgeMetadata'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+tags:
+  - name: Progress
+    description: Progress tracking (XP, levels, mastery)
+  - name: Quests
+    description: Quest system
+  - name: Badges
+    description: Badge progression

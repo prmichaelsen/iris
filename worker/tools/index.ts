@@ -1,14 +1,17 @@
 import Anthropic from '@anthropic-ai/sdk'
 import type { ToolContext, ToolRegistration } from './shared'
 
-// Import all tool registrations
 import { flashcardMatchingTool } from './flashcard-matching'
-// Future: import { genderPickTool } from './gender-pick'
-// Future: import { definitionTool } from './definition'
-// etc.
+import { flashcardFreeformTool } from './flashcard-freeform'
+import { genderPickTool } from './gender-pick'
+import { definitionTool } from './definition'
+import { fillBlankTool } from './fill-blank'
 
 const TOOL_REGISTRY: ToolRegistration[] = [
   flashcardMatchingTool,
+  flashcardFreeformTool,
+  definitionTool,
+  fillBlankTool,
 ]
 
 export function getTools(targetLang: { code: string } | null): Anthropic.Tool[] {
@@ -21,6 +24,16 @@ export async function executeToolCall(
   input: Record<string, unknown>,
   ctx: ToolContext,
 ): Promise<string> {
+  if (name === 'flashcard') {
+    const mode = input.mode as string
+    if (mode === 'gender-pick') {
+      return genderPickTool.execute(input, ctx)
+    } else if (mode === 'matching') {
+      return flashcardMatchingTool.execute(input, ctx)
+    } else {
+      return `Unknown flashcard mode: ${mode}`
+    }
+  }
   const reg = TOOL_REGISTRY.find((r) => r.tool.name === name)
   if (!reg) return `Unknown tool: ${name}`
   return reg.execute(input, ctx)

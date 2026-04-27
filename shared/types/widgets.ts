@@ -51,13 +51,31 @@ export interface FlashcardMatchingResult {
   cards: FlashcardMatchingCardResult[]
 }
 
-// ---- Flashcard Freeform (future) ----
+// ---- Flashcard Freeform ----
 
 export interface FlashcardFreeformWidget extends WidgetBase {
   type: 'flashcard-freeform'
   word: string
   audio?: boolean
   cefr_level: string
+}
+
+export interface FlashcardFreeformResponse {
+  type: 'widget_response'
+  widget_id: string
+  answer: string
+}
+
+export interface FlashcardFreeformResult {
+  type: 'widget_result'
+  widget_id: string
+  widget_type: 'flashcard-freeform'
+  word: string
+  correct_answer: string
+  user_answer: string
+  correct: boolean
+  grading_method: 'exact' | 'fuzzy' | 'claude'
+  claude_explanation?: string
 }
 
 // ---- Dictation (future) ----
@@ -76,21 +94,89 @@ export interface ComprehensionWidget extends WidgetBase {
   cefr_level: string
 }
 
-// ---- Fill-in-the-Blank (future) ----
+// ---- Fill-in-the-Blank ----
+
+export interface FillBlankCard {
+  card_id: string
+  sentence: string       // "Ich gehe ___ die Schule." (with ___ for blank)
+  hint?: string         // "dative preposition" or "past participle"
+  vocab_id: string      // for SM-2 lookup (lemma)
+}
 
 export interface FillBlankWidget extends WidgetBase {
   type: 'fill-blank'
-  sentence: string
-  hint?: string
+  cards: FillBlankCard[]
   cefr_level: string
+}
+
+export interface FillBlankAnswer {
+  card_id: string
+  typed_answer: string  // user's typed string (may be empty)
+}
+
+export interface FillBlankResponse {
+  type: 'widget_response'
+  widget_id: string
+  answers: FillBlankAnswer[]
+}
+
+export interface FillBlankCardResult {
+  card_id: string
+  sentence: string
+  expected: string      // revealed after grading
+  typed_answer: string
+  correct: boolean
+  hint?: string
+}
+
+export interface FillBlankResult {
+  type: 'widget_result'
+  widget_id: string
+  widget_type: 'fill-blank'
+  score: number
+  total: number
+  cards: FillBlankCardResult[]
 }
 
 // ---- Gender Pick (future) ----
 
+export interface GenderPickCard {
+  card_id: string
+  noun: string
+}
+
 export interface GenderPickWidget extends WidgetBase {
   type: 'gender-pick'
-  noun: string
+  cards: GenderPickCard[]
   cefr_level: string
+}
+
+export interface GenderPickAnswer {
+  card_id: string
+  selected_article: 'der' | 'die' | 'das'
+}
+
+export interface GenderPickResponse {
+  type: 'widget_response'
+  widget_id: string
+  answers: GenderPickAnswer[]
+}
+
+export interface GenderPickCardResult {
+  card_id: string
+  noun: string
+  correct_article: 'der' | 'die' | 'das'
+  selected_article: 'der' | 'die' | 'das'
+  correct: boolean
+}
+
+export interface GenderPickResult {
+  type: 'widget_result'
+  widget_id: string
+  widget_type: 'gender-pick'
+  score: number
+  total: number
+  cards: GenderPickCardResult[]
 }
 
 // ---- Article in Context (future) ----
@@ -123,13 +209,48 @@ export interface ConjugationWidget extends WidgetBase {
   cefr_level: string
 }
 
-// ---- Definition (future) ----
+// ---- Definition (Phase 2) ----
+
+export interface DefinitionCard {
+  card_id: string
+  word: string          // "die Abfahrt"
+  audio_url?: string    // present if speak=true and TTS succeeded
+}
 
 export interface DefinitionWidget extends WidgetBase {
   type: 'definition'
-  word: string
-  audio?: boolean
+  cards: DefinitionCard[]
   cefr_level: string
+  speak: boolean        // true = audio mode, false = text mode
+}
+
+export interface DefinitionAnswer {
+  card_id: string
+  answer: string        // user's freeform text: "departure"
+}
+
+export interface DefinitionResponse {
+  type: 'widget_response'
+  widget_id: string
+  answers: DefinitionAnswer[]
+}
+
+export interface DefinitionCardResult {
+  card_id: string
+  word: string
+  user_answer: string
+  expected_meaning: string   // revealed after grading (gloss_en)
+  correct: boolean
+  feedback: string           // Claude's 1-sentence feedback
+}
+
+export interface DefinitionResult {
+  type: 'widget_result'
+  widget_id: string
+  widget_type: 'definition'
+  score: number
+  total: number
+  cards: DefinitionCardResult[]
 }
 
 // ---- Sentence Order (future) ----
@@ -157,8 +278,8 @@ export type Widget =
 
 // ---- Widget Result (generic envelope — extend per type) ----
 
-export type WidgetResult = FlashcardMatchingResult
-// Future: | FlashcardFreeformResult | DictationResult | ...
+export type WidgetResult = FlashcardMatchingResult | FlashcardFreeformResult | GenderPickResult | DefinitionResult | FillBlankResult
+// Future: | DictationResult | ...
 
 // ---- Cancel ----
 
@@ -175,7 +296,7 @@ export interface WidgetContentBlock {
   widget_type: Widget['type']
   widget_id: string
   payload: Widget
-  response?: FlashcardMatchingResponse | null
+  response?: FlashcardMatchingResponse | FlashcardFreeformResponse | GenderPickResponse | DefinitionResponse | FillBlankResponse | null
   result?: WidgetResult | null
   status: 'active' | 'completed' | 'timed_out' | 'cancelled'
 }
@@ -200,7 +321,7 @@ export interface WidgetResultMessage {
   widget_type: Widget['type']
   score: number
   total: number
-  cards: FlashcardMatchingCardResult[]
+  cards: FlashcardMatchingCardResult[] | GenderPickCardResult[] | DefinitionCardResult[] | FillBlankCardResult[]
 }
 
 export interface WidgetCancelMessage {
@@ -212,7 +333,7 @@ export interface WidgetCancelMessage {
 export interface WidgetResponseMessage {
   type: 'widget_response'
   widget_id: string
-  answers: FlashcardMatchingAnswer[]
+  answers: FlashcardMatchingAnswer[] | GenderPickAnswer[] | DefinitionAnswer[] | FillBlankAnswer[]
 }
 
 // ---- Retake ----

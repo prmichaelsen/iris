@@ -625,3 +625,713 @@ footer {
   border-color: var(--accent);
   background: var(--user-bg);
 }
+
+/* ---- Gender Pick Widget ---- */
+
+.gp-widget {
+  background: var(--assistant-bg);
+  border: 1px solid var(--border);
+  border-radius: 0.75rem;
+  padding: 1.25rem;
+  margin-bottom: 0.75rem;
+  max-width: 85%;
+}
+
+.gp-progress {
+  font-size: 0.75rem;
+  color: var(--muted);
+  text-align: center;
+  margin-bottom: 0.5rem;
+  letter-spacing: 0.1em;
+}
+
+.gp-noun {
+  font-size: 1.5rem;
+  font-style: italic;
+  text-align: center;
+  padding: 1rem 0;
+  line-height: 1.3;
+}
+
+.gp-options {
+  display: flex;
+  gap: 0.5rem;
+  justify-content: center;
+}
+
+.gp-option {
+  padding: 0.75rem 1.25rem;
+  font-size: 1rem;
+  font-family: inherit;
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  background: var(--bg);
+  color: var(--fg);
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.gp-option:hover:not(:disabled) {
+  border-color: var(--accent);
+  background: var(--user-bg);
+}
+
+.gp-option:disabled {
+  cursor: default;
+  opacity: 0.7;
+}
+
+.gp-option-selected {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: white;
+}
+
+/* ---- Gender Pick Result ---- */
+
+.gp-result {
+  text-align: center;
+}
+
+.gp-score {
+  font-size: 2rem;
+  font-style: italic;
+  margin-bottom: 0.25rem;
+}
+
+.gp-score-label {
+  display: block;
+  font-size: 0.8rem;
+  color: var(--muted);
+  font-style: normal;
+  text-transform: lowercase;
+  letter-spacing: 0.05em;
+}
+
+.gp-result-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  margin: 1rem 0;
+  text-align: left;
+}
+
+.gp-result-card {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  padding: 0.35rem 0.5rem;
+  border-radius: 0.35rem;
+  font-size: 0.9rem;
+}
+
+.gp-correct {
+  background: rgba(34, 139, 34, 0.08);
+}
+
+.gp-incorrect {
+  background: rgba(185, 74, 58, 0.08);
+}
+
+.gp-result-mark {
+  font-size: 0.8rem;
+  flex-shrink: 0;
+  width: 1rem;
+}
+
+.gp-correct .gp-result-mark {
+  color: forestgreen;
+}
+
+.gp-incorrect .gp-result-mark {
+  color: var(--accent);
+}
+
+.gp-result-noun {
+  font-style: italic;
+  flex-shrink: 0;
+  min-width: 0;
+}
+
+.gp-result-answer {
+  color: var(--muted);
+  font-size: 0.8rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.gp-retake {
+  padding: 0.5rem 1.25rem;
+  font-family: inherit;
+  font-size: 0.85rem;
+  font-style: italic;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--fg);
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.gp-retake:hover {
+  border-color: var(--accent);
+  background: var(--user-bg);
+}
+
+.fc-retake:hover {
+  border-color: var(--accent);
+  background: var(--user-bg);
+}
+
+/* ---- Definition Widget ---- */
+
+.def-widget {
+  background: var(--assistant-bg);
+  border: 1px solid var(--border);
+  border-radius: 0.75rem;
+  padding: 1.25rem;
+  margin-bottom: 0.75rem;
+  max-width: 85%;
+}
+
+.def-progress {
+  font-size: 0.75rem;
+  color: var(--muted);
+  text-align: center;
+  margin-bottom: 0.5rem;
+  letter-spacing: 0.1em;
+}
+
+.def-word {
+  font-size: 1.5rem;
+  font-style: italic;
+  text-align: center;
+  padding: 1rem 0;
+  line-height: 1.3;
+}
+
+.def-audio {
+  display: block;
+  width: 100%;
+  margin: 0.5rem 0;
+}
+
+.def-input-area {
+  display: flex;
+  gap: 0.5rem;
+  align-items: stretch;
+}
+
+.def-input {
+  flex: 1;
+  padding: 0.75rem 1rem;
+  font-size: 1rem;
+  font-family: inherit;
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  background: var(--bg);
+  color: var(--fg);
+  transition: border-color 0.15s;
+}
+
+.def-input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.def-submit {
+  padding: 0.75rem 1.25rem;
+  font-size: 1rem;
+  font-family: inherit;
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  background: var(--accent);
+  color: white;
+  cursor: pointer;
+  transition: opacity 0.15s;
+}
+
+.def-submit:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.def-submit:hover:not(:disabled) {
+  opacity: 0.9;
+}
+
+/* ---- Definition Result ---- */
+
+.def-result {
+  text-align: center;
+}
+
+.def-score {
+  font-size: 2rem;
+  font-style: italic;
+  margin-bottom: 0.25rem;
+}
+
+.def-score-label {
+  display: block;
+  font-size: 0.8rem;
+  color: var(--muted);
+  font-style: normal;
+  text-transform: lowercase;
+  letter-spacing: 0.05em;
+}
+
+.def-result-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin: 1rem 0;
+  text-align: left;
+}
+
+.def-result-card {
+  padding: 0.75rem;
+  border-radius: 0.5rem;
+  font-size: 0.9rem;
+}
+
+.def-correct {
+  background: rgba(34, 139, 34, 0.08);
+}
+
+.def-incorrect {
+  background: rgba(185, 74, 58, 0.08);
+}
+
+.def-result-header {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.def-result-mark {
+  font-size: 0.8rem;
+  flex-shrink: 0;
+  width: 1rem;
+}
+
+.def-correct .def-result-mark {
+  color: forestgreen;
+}
+
+.def-incorrect .def-result-mark {
+  color: var(--accent);
+}
+
+.def-result-word {
+  font-style: italic;
+  font-size: 1.1rem;
+}
+
+.def-result-answers {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  margin-bottom: 0.5rem;
+}
+
+.def-result-row {
+  display: flex;
+  gap: 0.5rem;
+  font-size: 0.85rem;
+}
+
+.def-result-label {
+  color: var(--muted);
+  flex-shrink: 0;
+  min-width: 5rem;
+}
+
+.def-result-value {
+  color: var(--fg);
+}
+
+.def-result-feedback {
+  font-size: 0.8rem;
+  color: var(--muted);
+  font-style: italic;
+  margin-top: 0.25rem;
+}
+
+.def-retake {
+  padding: 0.5rem 1.25rem;
+  font-family: inherit;
+  font-size: 0.85rem;
+  font-style: italic;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--fg);
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.def-retake:hover {
+  border-color: var(--accent);
+  background: var(--user-bg);
+}
+
+/* ---- Fill-Blank Widget ---- */
+
+.fb-widget {
+  background: var(--assistant-bg);
+  border: 1px solid var(--border);
+  border-radius: 0.75rem;
+  padding: 1.25rem;
+  margin-bottom: 0.75rem;
+  max-width: 85%;
+}
+
+.fb-progress {
+  font-size: 0.75rem;
+  color: var(--muted);
+  text-align: center;
+  margin-bottom: 0.5rem;
+  letter-spacing: 0.1em;
+}
+
+.fb-sentence {
+  font-size: 1.25rem;
+  text-align: center;
+  padding: 1rem 0;
+  line-height: 1.5;
+}
+
+.fb-blank {
+  color: var(--accent);
+  font-weight: bold;
+  font-style: italic;
+}
+
+.fb-hint {
+  font-size: 0.85rem;
+  color: var(--muted);
+  text-align: center;
+  font-style: italic;
+  margin-bottom: 0.75rem;
+}
+
+.fb-input-row {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.fb-input {
+  flex: 1;
+  padding: 0.75rem 1rem;
+  font-size: 1rem;
+  font-family: inherit;
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  background: var(--bg);
+  color: var(--fg);
+  transition: border-color 0.15s;
+}
+
+.fb-input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.fb-submit {
+  padding: 0.75rem 1.25rem;
+  font-family: inherit;
+  font-size: 1rem;
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  background: var(--accent);
+  color: white;
+  cursor: pointer;
+  transition: opacity 0.15s;
+}
+
+.fb-submit:hover:not(:disabled) {
+  opacity: 0.9;
+}
+
+.fb-submit:disabled {
+  cursor: default;
+  opacity: 0.5;
+}
+
+/* ---- Fill-Blank Result ---- */
+
+.fb-result {
+  text-align: center;
+}
+
+.fb-score {
+  font-size: 2rem;
+  font-style: italic;
+  margin-bottom: 0.25rem;
+}
+
+.fb-score-label {
+  display: block;
+  font-size: 0.8rem;
+  color: var(--muted);
+  font-style: normal;
+  text-transform: lowercase;
+  letter-spacing: 0.05em;
+}
+
+.fb-result-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin: 1rem 0;
+  text-align: left;
+}
+
+.fb-result-card {
+  display: flex;
+  gap: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  border-radius: 0.35rem;
+  font-size: 0.9rem;
+}
+
+.fb-correct {
+  background: rgba(34, 139, 34, 0.08);
+}
+
+.fb-incorrect {
+  background: rgba(185, 74, 58, 0.08);
+}
+
+.fb-result-mark {
+  font-size: 0.9rem;
+  flex-shrink: 0;
+  width: 1rem;
+  margin-top: 0.1rem;
+}
+
+.fb-correct .fb-result-mark {
+  color: forestgreen;
+}
+
+.fb-incorrect .fb-result-mark {
+  color: var(--accent);
+}
+
+.fb-result-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.fb-result-sentence {
+  line-height: 1.4;
+}
+
+.fb-result-correction {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+.fb-result-user-answer {
+  color: var(--accent);
+  font-style: italic;
+}
+
+.fb-result-arrow {
+  opacity: 0.5;
+}
+
+.fb-result-expected {
+  color: forestgreen;
+  font-weight: 600;
+}
+
+.fb-retake {
+  padding: 0.5rem 1.25rem;
+  font-family: inherit;
+  font-size: 0.85rem;
+  font-style: italic;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--fg);
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.fb-retake:hover {
+  border-color: var(--accent);
+  background: var(--user-bg);
+}
+
+/* ---- Flashcard Freeform Widget ---- */
+
+.fcf-widget {
+  background: var(--assistant-bg);
+  border: 1px solid var(--border);
+  border-radius: 0.75rem;
+  padding: 1.25rem;
+  margin-bottom: 0.75rem;
+  max-width: 85%;
+}
+
+.fcf-word {
+  font-size: 1.5rem;
+  font-style: italic;
+  text-align: center;
+  padding: 1rem 0;
+  line-height: 1.3;
+}
+
+.fcf-input-container {
+  margin: 1rem 0;
+}
+
+.fcf-input {
+  width: 100%;
+  padding: 0.75rem 1rem;
+  font-size: 1rem;
+  font-family: inherit;
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  background: var(--bg);
+  color: var(--fg);
+  transition: border-color 0.15s;
+}
+
+.fcf-input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.fcf-input:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.fcf-submit {
+  width: 100%;
+  padding: 0.75rem 1rem;
+  font-family: inherit;
+  font-size: 1rem;
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  background: var(--accent);
+  color: white;
+  cursor: pointer;
+  transition: opacity 0.15s;
+}
+
+.fcf-submit:hover:not(:disabled) {
+  opacity: 0.9;
+}
+
+.fcf-submit:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* ---- Flashcard Freeform Result ---- */
+
+.fcf-result {
+  text-align: center;
+}
+
+.fcf-result-header {
+  padding: 0.75rem;
+  border-radius: 0.5rem;
+  margin-bottom: 1rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+}
+
+.fcf-correct {
+  background: rgba(34, 139, 34, 0.08);
+}
+
+.fcf-incorrect {
+  background: rgba(185, 74, 58, 0.08);
+}
+
+.fcf-result-mark {
+  font-size: 1.5rem;
+}
+
+.fcf-correct .fcf-result-mark {
+  color: forestgreen;
+}
+
+.fcf-incorrect .fcf-result-mark {
+  color: var(--accent);
+}
+
+.fcf-result-word {
+  font-size: 1.25rem;
+  font-style: italic;
+}
+
+.fcf-result-details {
+  text-align: left;
+  margin: 1rem 0;
+}
+
+.fcf-result-row {
+  display: flex;
+  gap: 0.5rem;
+  padding: 0.5rem 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.fcf-result-row:last-child {
+  border-bottom: none;
+}
+
+.fcf-result-label {
+  font-weight: 600;
+  min-width: 120px;
+}
+
+.fcf-result-value {
+  color: var(--muted);
+}
+
+.fcf-result-explanation {
+  padding: 0.75rem;
+  margin-top: 0.5rem;
+  background: rgba(199, 93, 58, 0.05);
+  border-left: 3px solid var(--accent);
+  border-radius: 0.25rem;
+  font-size: 0.9rem;
+  font-style: italic;
+  color: var(--muted);
+}
+
+.fcf-retake {
+  padding: 0.5rem 1.25rem;
+  font-family: inherit;
+  font-size: 0.85rem;
+  font-style: italic;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--fg);
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+  margin-top: 1rem;
+}
+
+.fcf-retake:hover {
+  border-color: var(--accent);
+  background: var(--user-bg);
+}

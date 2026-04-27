@@ -12,12 +12,16 @@ const WIDGET_TIMEOUT_MS = 300_000
 export const flashcardMatchingTool: ToolRegistration = {
   tool: {
     name: 'flashcard',
-    description: `Start a flashcard exercise. The server generates matching-mode cards from the user's vocabulary at their CEFR level. Use when the user wants to practice, drill, or review vocabulary. Say something encouraging before calling this tool.`,
+    description: `Start a flashcard exercise. Modes: matching (vocab translation), gender-pick (German noun gender). Use when the user wants to practice, drill, or review. Say something encouraging before calling this tool.`,
     input_schema: {
       type: 'object' as const,
       properties: {
-        mode: { type: 'string', enum: ['matching'], description: 'Quiz mode. Only matching is supported.' },
-        count: { type: 'integer', description: 'Number of cards (1-20). Default 10.' },
+        mode: {
+          type: 'string',
+          enum: ['matching', 'gender-pick'],
+          description: 'Quiz mode. matching: translate vocab; gender-pick: choose der/die/das for German nouns.',
+        },
+        count: { type: 'integer', minimum: 1, maximum: 20, description: 'Number of cards (1-20). Default 10.' },
         cefr_level: { type: 'string', enum: ['A1', 'A2', 'B1'], description: 'Target CEFR level. Omit to auto-detect.' },
       },
       required: ['mode'],
@@ -34,7 +38,7 @@ async function executeFlashcard(
 
   if (!targetLang) return 'Please select a language first.'
   const mode = input.mode as string
-  if (mode !== 'matching') return 'Only matching mode is supported in Phase 1.'
+  if (mode !== 'matching') return 'Only matching mode is supported by this executor.'
   const count = Math.max(1, Math.min(20, Number(input.count) || 10))
   const cefrLevel = (input.cefr_level as string) || undefined
 

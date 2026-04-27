@@ -2,6 +2,10 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Virtuoso, type VirtuosoHandle } from 'react-virtuoso'
 import { Recorder, StreamingPlayer, playBlob, unlockAudioPlayback, stopActivePlayback, type PlaybackHandle } from './audio'
 import { FlashcardActive, FlashcardResult } from './FlashcardWidget'
+import { FlashcardFreeformActive, FlashcardFreeformResult } from './widgets/FlashcardFreeform'
+import { GenderPickActive, GenderPickResult } from './widgets/GenderPick'
+import { DefinitionActive, DefinitionResult } from './widgets/Definition'
+import { FillBlankActive, FillBlankResult } from './widgets/FillBlank'
 import type { AuthUser } from './AuthGate'
 import LanguagePicker from './LanguagePicker'
 import { findLanguage } from './languages'
@@ -9,15 +13,27 @@ import type {
   FlashcardMatchingWidget,
   FlashcardMatchingAnswer,
   FlashcardMatchingCardResult,
+  FlashcardFreeformWidget,
+  FlashcardFreeformResult as FlashcardFreeformResultType,
+  GenderPickWidget,
+  GenderPickAnswer,
+  GenderPickCardResult,
+  DefinitionWidget,
+  DefinitionAnswer,
+  DefinitionCardResult,
+  FillBlankWidget,
+  FillBlankAnswer,
+  FillBlankCardResult,
   WidgetContentBlock,
   ContentBlock,
+  Widget,
 } from '../shared/types/widgets'
 
 type Status = 'connecting' | 'reconnecting' | 'idle' | 'listening' | 'thinking' | 'speaking' | 'error'
 
 interface WidgetTurn {
-  widget: FlashcardMatchingWidget
-  result?: { score: number; total: number; cards: FlashcardMatchingCardResult[] }
+  widget: Widget
+  result?: any
 }
 
 type Turn = {
@@ -38,7 +54,7 @@ export default function App({ user, signOut }: AppProps) {
   const [partial, setPartial] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [lang, setLang] = useState<string>(user.targetLang?.code ?? 'auto')
-  const [activeWidget, setActiveWidget] = useState<FlashcardMatchingWidget | null>(null)
+  const [activeWidget, setActiveWidget] = useState<Widget | null>(null)
   const [playingTurnIndex, setPlayingTurnIndex] = useState<number | null>(null)
   const playbackRef = useRef<PlaybackHandle | null>(null)
 
@@ -78,10 +94,8 @@ export default function App({ user, signOut }: AppProps) {
                 )
                 if (widgetBlocks.length > 0) {
                   turn.widgets = widgetBlocks.map((wb) => ({
-                    widget: wb.payload as FlashcardMatchingWidget,
-                    result: wb.result
-                      ? { score: wb.result.score, total: wb.result.total, cards: (wb.result as any).cards }
-                      : undefined,
+                    widget: wb.payload,
+                    result: wb.result || undefined,
                   }))
                 }
               }
@@ -115,7 +129,7 @@ export default function App({ user, signOut }: AppProps) {
           }
           setStatus('idle')
         } else if (msg.type === 'widget') {
-          const w = msg.widget as FlashcardMatchingWidget
+          const w = msg.widget as Widget
           setActiveWidget(w)
           // Attach to current or create new assistant turn with the widget
           setHistory((h) => {
@@ -126,7 +140,7 @@ export default function App({ user, signOut }: AppProps) {
             return [...h, { role: 'assistant', text: '', widgets: [{ widget: w }] }]
           })
         } else if (msg.type === 'widget_result') {
-          const result = msg as { widget_id: string; score: number; total: number; cards: FlashcardMatchingCardResult[] }
+          const result = msg as any
           setActiveWidget(null)
           // Attach widget result to the most recent assistant turn
           setHistory((h) => {
@@ -136,7 +150,7 @@ export default function App({ user, signOut }: AppProps) {
               // Find the widget turn matching this result
               const updated = widgets.map((w) =>
                 w.widget.widget_id === result.widget_id
-                  ? { ...w, result: { score: result.score, total: result.total, cards: result.cards } }
+                  ? { ...w, result }
                   : w,
               )
               return [...h.slice(0, -1), { ...last, widgets: updated }]
@@ -378,32 +392,134 @@ export default function App({ user, signOut }: AppProps) {
                   )}
                 </div>
                 {turn.text && <div className="text">{turn.text}</div>}
-                {turn.widgets?.map((wt) =>
-                  wt.result ? (
-                    <FlashcardResult
-                      key={wt.widget.widget_id}
-                      widget={wt.widget}
-                      cards={wt.result.cards}
-                      score={wt.result.score}
-                      total={wt.result.total}
-                      onRetake={() => {
-                        wsRef.current?.send(JSON.stringify({ type: 'widget_retake', widget_id: wt.widget.widget_id }))
-                      }}
-                    />
-                  ) : activeWidget?.widget_id === wt.widget.widget_id ? (
-                    <FlashcardActive
-                      key={wt.widget.widget_id}
-                      widget={wt.widget}
-                      onSubmit={(answers) => {
-                        wsRef.current?.send(JSON.stringify({
-                          type: 'widget_response',
-                          widget_id: wt.widget.widget_id,
-                          answers,
-                        }))
-                      }}
-                    />
-                  ) : null,
-                )}
+                {turn.widgets?.map((wt) => {
+                  const isActive = activeWidget?.widget_id === wt.widget.widget_id
+
+                  if (wt.widget.type === 'flashcard-matching') {
+                    return wt.result ? (
+                      <FlashcardResult
+                        key={wt.widget.widget_id}
+                        widget={wt.widget as FlashcardMatchingWidget}
+                        cards={wt.result.cards as FlashcardMatchingCardResult[]}
+                        score={wt.result.score}
+                        total={wt.result.total}
+                        onRetake={() => {
+                          wsRef.current?.send(JSON.stringify({ type: 'widget_retake', widget_id: wt.widget.widget_id }))
+                        }}
+                      />
+                    ) : isActive ? (
+                      <FlashcardActive
+                        key={wt.widget.widget_id}
+                        widget={wt.widget as FlashcardMatchingWidget}
+                        onSubmit={(answers) => {
+                          wsRef.current?.send(JSON.stringify({
+                            type: 'widget_response',
+                            widget_id: wt.widget.widget_id,
+                            answers,
+                          }))
+                        }}
+                      />
+                    ) : null
+                  } else if (wt.widget.type === 'flashcard-freeform') {
+                    return wt.result ? (
+                      <FlashcardFreeformResult
+                        key={wt.widget.widget_id}
+                        result={wt.result as FlashcardFreeformResultType}
+                        onRetake={() => {
+                          wsRef.current?.send(JSON.stringify({ type: 'widget_retake', widget_id: wt.widget.widget_id }))
+                        }}
+                      />
+                    ) : isActive ? (
+                      <FlashcardFreeformActive
+                        key={wt.widget.widget_id}
+                        widget={wt.widget as FlashcardFreeformWidget}
+                        onSubmit={(answer) => {
+                          wsRef.current?.send(JSON.stringify({
+                            type: 'widget_response',
+                            widget_id: wt.widget.widget_id,
+                            answer,
+                          }))
+                        }}
+                      />
+                    ) : null
+                  } else if (wt.widget.type === 'gender-pick') {
+                    return wt.result ? (
+                      <GenderPickResult
+                        key={wt.widget.widget_id}
+                        widget={wt.widget as GenderPickWidget}
+                        cards={wt.result.cards as GenderPickCardResult[]}
+                        score={wt.result.score}
+                        total={wt.result.total}
+                        onRetake={() => {
+                          wsRef.current?.send(JSON.stringify({ type: 'widget_retake', widget_id: wt.widget.widget_id }))
+                        }}
+                      />
+                    ) : isActive ? (
+                      <GenderPickActive
+                        key={wt.widget.widget_id}
+                        widget={wt.widget as GenderPickWidget}
+                        onSubmit={(answers) => {
+                          wsRef.current?.send(JSON.stringify({
+                            type: 'widget_response',
+                            widget_id: wt.widget.widget_id,
+                            answers,
+                          }))
+                        }}
+                      />
+                    ) : null
+                  } else if (wt.widget.type === 'definition') {
+                    return wt.result ? (
+                      <DefinitionResult
+                        key={wt.widget.widget_id}
+                        widget={wt.widget as DefinitionWidget}
+                        cards={wt.result.cards as DefinitionCardResult[]}
+                        score={wt.result.score}
+                        total={wt.result.total}
+                        onRetake={() => {
+                          wsRef.current?.send(JSON.stringify({ type: 'widget_retake', widget_id: wt.widget.widget_id }))
+                        }}
+                      />
+                    ) : isActive ? (
+                      <DefinitionActive
+                        key={wt.widget.widget_id}
+                        widget={wt.widget as DefinitionWidget}
+                        onSubmit={(answers) => {
+                          wsRef.current?.send(JSON.stringify({
+                            type: 'widget_response',
+                            widget_id: wt.widget.widget_id,
+                            answers,
+                          }))
+                        }}
+                      />
+                    ) : null
+                  } else if (wt.widget.type === 'fill-blank') {
+                    return wt.result ? (
+                      <FillBlankResult
+                        key={wt.widget.widget_id}
+                        widget={wt.widget as FillBlankWidget}
+                        cards={wt.result.cards as FillBlankCardResult[]}
+                        score={wt.result.score}
+                        total={wt.result.total}
+                        onRetake={() => {
+                          wsRef.current?.send(JSON.stringify({ type: 'widget_retake', widget_id: wt.widget.widget_id }))
+                        }}
+                      />
+                    ) : isActive ? (
+                      <FillBlankActive
+                        key={wt.widget.widget_id}
+                        widget={wt.widget as FillBlankWidget}
+                        onSubmit={(answers) => {
+                          wsRef.current?.send(JSON.stringify({
+                            type: 'widget_response',
+                            widget_id: wt.widget.widget_id,
+                            answers,
+                          }))
+                        }}
+                      />
+                    ) : null
+                  }
+                  return null
+                })}
               </div>
             )
           }}
