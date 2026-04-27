@@ -25,7 +25,7 @@ export async function executeToolCall(
   ctx: ToolContext,
 ): Promise<string> {
   if (name === 'flashcard') {
-    const mode = input.mode as string
+    const mode = ((input.mode as string) || '').replace(/_/g, '-')
     if (mode === 'gender-pick') {
       return genderPickTool.execute(input, ctx)
     } else if (mode === 'matching') {

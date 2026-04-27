@@ -6,7 +6,7 @@ import { describe, it, expect } from 'vitest'
 
 function routeToolCall(name: string, input: Record<string, unknown>): string {
   if (name === 'flashcard') {
-    const mode = input.mode as string
+    const mode = ((input.mode as string) || '').replace(/_/g, '-')
     if (mode === 'gender-pick') return 'genderPickTool'
     if (mode === 'matching') return 'flashcardMatchingTool'
     return `unknown-mode:${mode}`
@@ -41,11 +41,12 @@ describe('tool dispatch routing', () => {
     expect(routeToolCall('nonexistent', {})).toBe('unknown-tool:nonexistent')
   })
 
-  // This test documents the underscore vs hyphen concern
-  it('Claude might send gender_pick with underscore', () => {
-    const mode = 'gender_pick'
-    const routes = mode === 'gender-pick' ? 'genderPickTool' : `unknown-mode:${mode}`
-    // This SHOULD fail — documenting the known gap
-    expect(routes).toBe('unknown-mode:gender_pick')
+  it('normalizes underscore to hyphen (Claude sometimes sends gender_pick)', () => {
+    expect(routeToolCall('flashcard', { mode: 'gender_pick' })).toBe('genderPickTool')
+  })
+
+  it('handles empty/missing mode', () => {
+    expect(routeToolCall('flashcard', {})).toBe('unknown-mode:')
+    expect(routeToolCall('flashcard', { mode: '' })).toBe('unknown-mode:')
   })
 })
