@@ -80,7 +80,8 @@ INSERT INTO quests (id, name_de, name_en, description_de, description_en, catego
   ('quest_komplimente_kuenstler', 'Komplimente-Künstler', 'Compliment Artist', 'Meistere Komplimente auf Deutsch', 'Master giving compliments in German', 'cultural', NULL, '[1]', 125, 0, 0),
   ('quest_beschwerdefuehrer', 'Beschwerdeführer', 'Complainer', 'Meistere Beschwerde-Vokabular', 'Master complaint vocabulary', 'cultural', NULL, '[1]', 125, 0, 0),
   ('quest_baecker_freund', 'Bäcker-Freund', 'Baker''s Friend', 'Meistere Bäckerei-Bestellung (Brötchen, Brezel, etc.)', 'Master bakery ordering (Brötchen, Brezel, etc.)', 'cultural', NULL, '[1]', 100, 0, 0),
-  ('quest_puenktlich', 'Pünktlich!', 'Punctual!', 'Vervollständige Übungen zur geplanten Zeit 5 Tage hintereinander', 'Complete exercises at scheduled time 5 days in a row', 'cultural', NULL, '[1]', 150, 0, 0);
+  ('quest_puenktlich', 'Pünktlich!', 'Punctual!', 'Vervollständige Übungen zur geplanten Zeit 5 Tage hintereinander', 'Complete exercises at scheduled time 5 days in a row', 'cultural', NULL, '[1]', 150, 0, 0),
+  ('quest_mila_gallery_inspiration', 'Galerie-Inspiration', 'Gallery Inspiration', 'Besuche eine Berliner Galerie und diskutiere Kunst auf Deutsch', 'Visit a Berlin gallery and discuss art in German', 'cultural', NULL, '[1]', 200, 0, 0);
 
 -- ============================================
 -- META/SYSTEM QUESTS
