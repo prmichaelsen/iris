@@ -56,8 +56,8 @@ async function executeFlashcardFreeform(
     .bind(vc.lemma, targetLang.code)
     .first<{ id: number; gloss_en: string | null }>()
 
-  if (!vocabRow || !vocabRow.gloss_en) {
-    // Need to generate gloss
+  let resolvedGloss = vocabRow?.gloss_en
+  if (!resolvedGloss) {
     await ensureGloss(env, vc.lemma, vc.article, targetLang.code)
     const refreshed = await env.DB
       .prepare("SELECT id, gloss_en FROM vocab_items WHERE lemma = ? AND language = ? AND source = 'goethe' LIMIT 1")
@@ -66,9 +66,10 @@ async function executeFlashcardFreeform(
     if (!refreshed || !refreshed.gloss_en) {
       return `Unable to generate gloss for ${vc.lemma}. Please try again.`
     }
+    resolvedGloss = refreshed.gloss_en
   }
 
-  const correctAnswer = vocabRow?.gloss_en || vc.lemma
+  const correctAnswer = resolvedGloss
   const word = vc.article ? `${vc.article} ${vc.lemma}` : vc.lemma
   const widgetId = newId()
 
