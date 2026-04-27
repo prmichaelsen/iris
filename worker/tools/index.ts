@@ -6,12 +6,16 @@ import { flashcardFreeformTool } from './flashcard-freeform'
 import { genderPickTool } from './gender-pick'
 import { definitionTool } from './definition'
 import { fillBlankTool } from './fill-blank'
+import { setContextTool, viewProgressTool, debugStateTool } from './gamification'
 
 const TOOL_REGISTRY: ToolRegistration[] = [
   flashcardMatchingTool,
   flashcardFreeformTool,
   definitionTool,
   fillBlankTool,
+  setContextTool,
+  viewProgressTool,
+  debugStateTool,
 ]
 
 export function getTools(targetLang: { code: string } | null): Anthropic.Tool[] {
@@ -25,7 +29,7 @@ export async function executeToolCall(
   ctx: ToolContext,
 ): Promise<string> {
   if (name === 'flashcard') {
-    const mode = ((input.mode as string) || '').replace(/_/g, '-')
+    const mode = input.mode as string
     if (mode === 'gender-pick') {
       return genderPickTool.execute(input, ctx)
     } else if (mode === 'matching') {

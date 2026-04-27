@@ -329,6 +329,453 @@ components:
           additionalProperties: true
           description: Additional error context
 
+    # ============================================================================
+    # Pen Pal System (Task 3)
+    # ============================================================================
+
+    PenPal:
+      type: object
+      required:
+        - id
+        - name
+        - age
+        - profession_de
+        - profession_en
+        - region_id
+        - personality_traits
+        - collectible_type
+        - unlock_quest_id
+      properties:
+        id:
+          type: string
+          description: Pen pal identifier (e.g., 'mila', 'thomas', 'lena')
+        name:
+          type: string
+          description: Pen pal name
+        age:
+          type: integer
+          description: Pen pal age
+        profession_de:
+          type: string
+          description: Profession in German
+        profession_en:
+          type: string
+          description: Profession in English
+        region_id:
+          type: string
+          description: Associated region
+        personality_traits:
+          type: array
+          items:
+            type: string
+          description: Personality traits (e.g., 'music_lover', 'foodie')
+        collectible_type:
+          type: string
+          description: Type of collectibles they send (stickers, vinyl, wine_labels, etc.)
+        unlock_quest_id:
+          type: string
+          description: Tier 2 regional quest required to unlock
+
+    UserPenPal:
+      type: object
+      required:
+        - user_id
+        - pen_pal_id
+        - unlocked
+        - relationship_score
+        - letters_sent_by_user
+        - letters_received
+        - attention_score
+        - temperature
+      properties:
+        user_id:
+          type: string
+          description: User identifier
+        pen_pal_id:
+          type: string
+          description: Pen pal identifier
+        unlocked:
+          type: boolean
+          description: Whether pen pal is unlocked
+        relationship_score:
+          type: integer
+          minimum: 0
+          maximum: 100
+          description: Relationship score (0-100)
+        letters_sent_by_user:
+          type: integer
+          minimum: 0
+          description: Count of letters sent by user
+        letters_received:
+          type: integer
+          minimum: 0
+          description: Count of letters received from pen pal
+        last_interaction_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: ISO 8601 timestamp of last interaction
+        attention_score:
+          type: number
+          format: float
+          description: |
+            Calculated attention score: (letters_sent * 3) + (letters_read * 1)
+            + (recommendations_engaged * 2) - (days_since_last * 0.5)
+        temperature:
+          type: string
+          enum: [hot, warm, cool, dormant]
+          description: |
+            Relationship temperature based on attention score:
+            - hot: attention_score >= 30 (weekly letters)
+            - warm: 15-29 (bi-weekly letters)
+            - cool: 5-14 (monthly letters)
+            - dormant: < 5 (no new letters)
+        unlocked_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: ISO 8601 timestamp when unlocked
+
+    PenPalLetter:
+      type: object
+      required:
+        - id
+        - pen_pal_id
+        - user_id
+        - sender
+        - sent_at
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Letter identifier
+        pen_pal_id:
+          type: string
+          description: Pen pal identifier
+        user_id:
+          type: string
+          description: User identifier
+        sender:
+          type: string
+          enum: [pen_pal, user]
+          description: Who sent the letter
+        content_de:
+          type: string
+          description: Letter content in German
+        content_en:
+          type: string
+          nullable: true
+          description: Letter translation (null for user letters)
+        collectible_gift_id:
+          type: string
+          nullable: true
+          description: Attached collectible gift (from pen pal letters only)
+        sent_at:
+          type: string
+          format: date-time
+          description: ISO 8601 timestamp
+        read_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: ISO 8601 timestamp when read
+
+    SendLetterRequest:
+      type: object
+      required:
+        - user_id
+        - content_de
+      properties:
+        user_id:
+          type: string
+          description: User identifier
+        content_de:
+          type: string
+          minLength: 10
+          maxLength: 1000
+          description: Letter content in German (10-1000 characters)
+
+    # ============================================================================
+    # Collectibles System (Task 3)
+    # ============================================================================
+
+    Collectible:
+      type: object
+      required:
+        - id
+        - pen_pal_id
+        - type
+        - name_de
+        - name_en
+        - description_de
+        - description_en
+        - image_url
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Collectible identifier
+        pen_pal_id:
+          type: string
+          description: Associated pen pal
+        type:
+          type: string
+          description: Collectible type (sticker, vinyl, wine_label, flower, etc.)
+        name_de:
+          type: string
+          description: Name in German
+        name_en:
+          type: string
+          description: Name in English
+        description_de:
+          type: string
+          description: Description in German
+        description_en:
+          type: string
+          description: Description in English
+        image_url:
+          type: string
+          format: uri
+          description: R2 CDN URL for collectible image
+        metadata:
+          type: object
+          additionalProperties: true
+          description: |
+            Type-specific metadata:
+            - Vinyl: {artist, album, year, bandcamp_link, youtube_link}
+            - Wine: {vineyard, year, varietal, tasting_notes}
+            - Flower: {species, location, date_collected}
+            - Sticker: {theme, artist, series}
+        external_links:
+          type: array
+          items:
+            type: string
+            format: uri
+          description: External links (YouTube, Bandcamp, etc.)
+
+    UserCollectible:
+      type: object
+      required:
+        - user_id
+        - collectible_id
+        - acquired_at
+      properties:
+        user_id:
+          type: string
+          description: User identifier
+        collectible_id:
+          type: string
+          format: uuid
+          description: Collectible identifier
+        acquired_from_letter_id:
+          type: string
+          format: uuid
+          nullable: true
+          description: Letter that contained this gift
+        acquired_at:
+          type: string
+          format: date-time
+          description: ISO 8601 timestamp
+
+    # ============================================================================
+    # Photo Collection (Fotos) System (Task 3)
+    # ============================================================================
+
+    Foto:
+      type: object
+      required:
+        - id
+        - region_id
+        - category
+        - title_de
+        - title_en
+        - caption_de
+        - caption_en
+        - image_url
+        - subquest_id
+        - tier_required
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Foto identifier
+        region_id:
+          type: string
+          description: Associated region
+        category:
+          type: string
+          enum: [menschen, orte, kultur, essen]
+          description: Photo category
+        title_de:
+          type: string
+          description: Title in German
+        title_en:
+          type: string
+          description: Title in English
+        caption_de:
+          type: string
+          description: Caption in German
+        caption_en:
+          type: string
+          description: Caption in English
+        image_url:
+          type: string
+          format: uri
+          description: R2 CDN URL for photo (pre-generated, no generation API call)
+        subquest_id:
+          type: string
+          description: Subquest that unlocks this photo
+        tier_required:
+          type: integer
+          minimum: 1
+          maximum: 4
+          description: Tier requirement (1=Bronze, 2=Silver, 3=Gold, 4=Diamond)
+
+    UserFoto:
+      type: object
+      required:
+        - user_id
+        - foto_id
+        - unlocked_at
+      properties:
+        user_id:
+          type: string
+          description: User identifier
+        foto_id:
+          type: string
+          format: uuid
+          description: Foto identifier
+        unlocked_at:
+          type: string
+          format: date-time
+          description: ISO 8601 timestamp
+
+    # ============================================================================
+    # Emma's Fairy Tale Mini-Game (Task 3)
+    # ============================================================================
+
+    UserFairyTale:
+      type: object
+      required:
+        - id
+        - user_id
+        - title
+        - content
+        - turn_count
+        - user_level_at_creation
+        - grammar_errors_count
+        - vocabulary_richness_score
+        - created_at
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Fairy tale identifier
+        user_id:
+          type: string
+          description: User identifier
+        title:
+          type: string
+          description: Story title
+        content:
+          type: string
+          description: Full story with turn markers
+        turn_count:
+          type: integer
+          minimum: 1
+          description: Number of turns in story
+        user_level_at_creation:
+          type: integer
+          minimum: 1
+          description: User's level when story was created (for progress tracking)
+        grammar_errors_count:
+          type: integer
+          minimum: 0
+          description: Total grammar errors in user's turns
+        vocabulary_richness_score:
+          type: number
+          format: float
+          minimum: 0
+          maximum: 100
+          description: Vocabulary richness score (0-100)
+        created_at:
+          type: string
+          format: date-time
+          description: ISO 8601 timestamp
+        emma_reactions:
+          type: array
+          items:
+            type: string
+          description: Emma's special reactions during the story
+
+    FairyTaleTurn:
+      type: object
+      required:
+        - fairy_tale_id
+        - turn_number
+        - author
+        - content
+      properties:
+        fairy_tale_id:
+          type: string
+          format: uuid
+          description: Associated fairy tale
+        turn_number:
+          type: integer
+          minimum: 1
+          description: Turn sequence number
+        author:
+          type: string
+          enum: [user, emma]
+          description: Who wrote this turn
+        content:
+          type: string
+          description: Turn content in German
+        grammar_score:
+          type: number
+          format: float
+          nullable: true
+          description: Grammar score (null for Emma's turns)
+        vocabulary_score:
+          type: number
+          format: float
+          nullable: true
+          description: Vocabulary score (null for Emma's turns)
+        creativity_score:
+          type: number
+          format: float
+          nullable: true
+          description: Creativity score (null for Emma's turns)
+        emma_reaction:
+          type: string
+          nullable: true
+          description: Emma's reaction to this turn (if triggered)
+
+    StartFairyTaleRequest:
+      type: object
+      required:
+        - user_id
+      properties:
+        user_id:
+          type: string
+          description: User identifier
+
+    AddFairyTaleTurnRequest:
+      type: object
+      required:
+        - author
+        - content
+      properties:
+        author:
+          type: string
+          enum: [user, emma]
+          description: Turn author
+        content:
+          type: string
+          minLength: 10
+          maxLength: 500
+          description: Turn content in German
+
 paths:
   # ============================================================================
   # Progress Tracking Endpoints
@@ -837,6 +1284,918 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
 
+  # ============================================================================
+  # Pen Pal System Endpoints
+  # ============================================================================
+
+  /api/penpals/{userId}:
+    get:
+      summary: List all pen pals
+      description: Returns all pen pals with unlock status for the user
+      operationId: getUserPenPals
+      tags:
+        - PenPals
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: User identifier
+      responses:
+        '200':
+          description: Pen pals retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  pen_pals:
+                    type: array
+                    items:
+                      allOf:
+                        - $ref: '#/components/schemas/PenPal'
+                        - $ref: '#/components/schemas/UserPenPal'
+        '404':
+          description: User not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/penpals/{penPalId}/details:
+    get:
+      summary: Get pen pal profile
+      description: Returns detailed profile information for a pen pal
+      operationId: getPenPalDetails
+      tags:
+        - PenPals
+      parameters:
+        - name: penPalId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Pen pal identifier
+      responses:
+        '200':
+          description: Pen pal profile retrieved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PenPal'
+        '404':
+          description: Pen pal not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/penpals/{penPalId}/letters/{userId}:
+    get:
+      summary: Get conversation thread
+      description: Returns all letters exchanged between user and pen pal (paginated)
+      operationId: getPenPalLetters
+      tags:
+        - PenPals
+      parameters:
+        - name: penPalId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Pen pal identifier
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: User identifier
+        - name: page
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 1
+            minimum: 1
+          description: Page number
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 20
+            minimum: 1
+            maximum: 100
+          description: Items per page
+      responses:
+        '200':
+          description: Letter thread retrieved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  letters:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/PenPalLetter'
+                  pagination:
+                    type: object
+                    properties:
+                      page:
+                        type: integer
+                      limit:
+                        type: integer
+                      total:
+                        type: integer
+                      has_next:
+                        type: boolean
+        '403':
+          description: Pen pal not unlocked
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Pen pal or user not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/penpals/{penPalId}/send-letter:
+    post:
+      summary: Send letter to pen pal
+      description: |
+        User sends a letter to a pen pal. Subject to constraints:
+        - Pen pal must be unlocked
+        - Content must be 10-1000 characters
+        - Max 3 letters per week across all pen pals (R30)
+        - No letters if user inactive 7+ days
+      operationId: sendPenPalLetter
+      tags:
+        - PenPals
+      parameters:
+        - name: penPalId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Pen pal identifier
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SendLetterRequest'
+      responses:
+        '201':
+          description: Letter sent successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PenPalLetter'
+        '400':
+          description: Invalid parameters
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Pen pal not unlocked
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: Business logic violation (e.g., user inactive 7+ days)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '429':
+          description: Max 3 letters per week exceeded
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                code: WEEKLY_LETTER_LIMIT
+                message: You can only send 3 pen pal letters per week
+                details:
+                  letters_sent_this_week: 3
+                  limit: 3
+                  resets_at: '2026-05-04T00:00:00Z'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/penpals/{penPalId}/read-letter/{letterId}:
+    post:
+      summary: Mark letter as read
+      description: Marks a pen pal letter as read by the user
+      operationId: markLetterAsRead
+      tags:
+        - PenPals
+      parameters:
+        - name: penPalId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Pen pal identifier
+        - name: letterId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: Letter identifier
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - user_id
+              properties:
+                user_id:
+                  type: string
+      responses:
+        '200':
+          description: Letter marked as read
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  letter_id:
+                    type: string
+                    format: uuid
+                  read_at:
+                    type: string
+                    format: date-time
+        '404':
+          description: Letter not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: Letter already read
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/penpals/{penPalId}/relationship/{userId}:
+    get:
+      summary: Get relationship status
+      description: |
+        Returns relationship status including attention score calculation:
+        Formula: (letters_sent * 3) + (letters_read * 1) + (recommendations_engaged * 2) - (days_since_last * 0.5)
+
+        Temperature thresholds:
+        - hot: attention_score >= 30 (weekly letters)
+        - warm: 15-29 (bi-weekly letters)
+        - cool: 5-14 (monthly letters)
+        - dormant: < 5 (no new letters)
+      operationId: getPenPalRelationship
+      tags:
+        - PenPals
+      parameters:
+        - name: penPalId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Pen pal identifier
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: User identifier
+      responses:
+        '200':
+          description: Relationship status retrieved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserPenPal'
+        '403':
+          description: Pen pal not unlocked
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Pen pal or user not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  # ============================================================================
+  # Collectibles System Endpoints
+  # ============================================================================
+
+  /api/collectibles/{userId}:
+    get:
+      summary: Get all collected items
+      description: Returns all collectibles acquired by user, grouped by pen pal
+      operationId: getUserCollectibles
+      tags:
+        - Collectibles
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: User identifier
+      responses:
+        '200':
+          description: Collectibles retrieved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  collectibles:
+                    type: array
+                    items:
+                      allOf:
+                        - $ref: '#/components/schemas/Collectible'
+                        - $ref: '#/components/schemas/UserCollectible'
+        '404':
+          description: User not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/collectibles/{penPalId}/collection:
+    get:
+      summary: Get collection for one pen pal
+      description: |
+        Returns full collection for a pen pal (both locked and unlocked).
+        Locked items show as silhouettes (no image_url or placeholder).
+      operationId: getPenPalCollection
+      tags:
+        - Collectibles
+      parameters:
+        - name: penPalId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Pen pal identifier
+        - name: userId
+          in: query
+          required: true
+          schema:
+            type: string
+          description: User identifier
+      responses:
+        '200':
+          description: Collection retrieved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  pen_pal_id:
+                    type: string
+                  collectibles:
+                    type: array
+                    items:
+                      allOf:
+                        - $ref: '#/components/schemas/Collectible'
+                        - type: object
+                          properties:
+                            unlocked:
+                              type: boolean
+                              description: Whether user has unlocked this collectible
+        '404':
+          description: Pen pal not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/collectibles/{collectibleId}/unlock:
+    post:
+      summary: Unlock collectible
+      description: Unlocks a collectible from a letter gift (idempotent)
+      operationId: unlockCollectible
+      tags:
+        - Collectibles
+      parameters:
+        - name: collectibleId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: Collectible identifier
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - user_id
+                - letter_id
+              properties:
+                user_id:
+                  type: string
+                letter_id:
+                  type: string
+                  format: uuid
+      responses:
+        '201':
+          description: Collectible unlocked
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserCollectible'
+        '400':
+          description: Invalid parameters
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Collectible not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: Already unlocked
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  # ============================================================================
+  # Photo Collection (Fotos) System Endpoints
+  # ============================================================================
+
+  /api/fotos/{userId}:
+    get:
+      summary: Get all unlocked Fotos
+      description: Returns user's unlocked photos (filterable by region/category)
+      operationId: getUserFotos
+      tags:
+        - Fotos
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: User identifier
+        - name: region
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Filter by region
+        - name: category
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [menschen, orte, kultur, essen]
+          description: Filter by category
+      responses:
+        '200':
+          description: Fotos retrieved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  fotos:
+                    type: array
+                    items:
+                      allOf:
+                        - $ref: '#/components/schemas/Foto'
+                        - $ref: '#/components/schemas/UserFoto'
+        '404':
+          description: User not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/fotos/{fotoId}/unlock:
+    post:
+      summary: Unlock Foto
+      description: |
+        Unlocks a Foto (from subquest completion). Validates:
+        - Subquest must be completed
+        - Tier requirement must be met (R9)
+        - No duplicate unlocks (idempotent)
+
+        Note: Fotos are pre-generated and cached in R2. No image generation API call.
+      operationId: unlockFoto
+      tags:
+        - Fotos
+      parameters:
+        - name: fotoId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: Foto identifier
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - user_id
+              properties:
+                user_id:
+                  type: string
+      responses:
+        '201':
+          description: Foto unlocked
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserFoto'
+        '400':
+          description: Invalid parameters
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Tier requirement not met
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                code: TIER_REQUIREMENT_NOT_MET
+                message: Requires Silver in Grammar + Listening
+                details:
+                  tier_required: 3
+                  current_badges:
+                    grammar: bronze
+                    listening: grey
+        '404':
+          description: Foto not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: Already unlocked
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: Subquest not completed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/fotos/{regionId}/gallery:
+    get:
+      summary: Gallery view for one region
+      description: Returns all Fotos for a region (both locked and unlocked)
+      operationId: getRegionGallery
+      tags:
+        - Fotos
+      parameters:
+        - name: regionId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Region identifier
+        - name: userId
+          in: query
+          required: true
+          schema:
+            type: string
+          description: User identifier
+      responses:
+        '200':
+          description: Gallery retrieved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  region_id:
+                    type: string
+                  fotos:
+                    type: array
+                    items:
+                      allOf:
+                        - $ref: '#/components/schemas/Foto'
+                        - type: object
+                          properties:
+                            unlocked:
+                              type: boolean
+                              description: Whether user has unlocked this Foto
+        '404':
+          description: Region not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  # ============================================================================
+  # Emma's Fairy Tale Mini-Game Endpoints
+  # ============================================================================
+
+  /api/fairytales/start:
+    post:
+      summary: Start new fairy tale
+      description: Creates a new fairy tale co-writing session with Emma
+      operationId: startFairyTale
+      tags:
+        - FairyTales
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StartFairyTaleRequest'
+      responses:
+        '201':
+          description: Fairy tale started
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserFairyTale'
+        '400':
+          description: Invalid parameters
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: User not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/fairytales/{fairyTaleId}/turn:
+    post:
+      summary: Add turn to story
+      description: |
+        Adds a turn to the fairy tale (user or Emma). Must alternate authors.
+        Claude API grades user turns on grammar/vocabulary/creativity and detects
+        trigger words (clocks, fairy tale tropes, precise descriptions).
+      operationId: addFairyTaleTurn
+      tags:
+        - FairyTales
+      parameters:
+        - name: fairyTaleId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: Fairy tale identifier
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AddFairyTaleTurnRequest'
+      responses:
+        '201':
+          description: Turn added
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FairyTaleTurn'
+        '400':
+          description: Invalid parameters
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Fairy tale not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: Must alternate authors
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/fairytales/{userId}/archive:
+    get:
+      summary: Get Märchenbuch archive
+      description: Returns all completed fairy tales for user (paginated)
+      operationId: getFairyTaleArchive
+      tags:
+        - FairyTales
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: User identifier
+        - name: page
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 1
+            minimum: 1
+          description: Page number
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 10
+            minimum: 1
+            maximum: 50
+          description: Items per page
+      responses:
+        '200':
+          description: Archive retrieved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  fairy_tales:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/UserFairyTale'
+                  pagination:
+                    type: object
+                    properties:
+                      page:
+                        type: integer
+                      limit:
+                        type: integer
+                      total:
+                        type: integer
+                      has_next:
+                        type: boolean
+        '404':
+          description: User not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/fairytales/{fairyTaleId}:
+    get:
+      summary: Get full fairy tale
+      description: Returns complete fairy tale with all turns and reactions
+      operationId: getFairyTale
+      tags:
+        - FairyTales
+      parameters:
+        - name: fairyTaleId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: Fairy tale identifier
+      responses:
+        '200':
+          description: Fairy tale retrieved
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/UserFairyTale'
+                  - type: object
+                    properties:
+                      turns:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/FairyTaleTurn'
+        '404':
+          description: Fairy tale not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
 tags:
   - name: Progress
     description: Progress tracking (XP, levels, mastery)
@@ -844,3 +2203,11 @@ tags:
     description: Quest system
   - name: Badges
     description: Badge progression
+  - name: PenPals
+    description: Pen pal correspondence system
+  - name: Collectibles
+    description: Collectible items from pen pals
+  - name: Fotos
+    description: Photo collection system
+  - name: FairyTales
+    description: Emma's fairy tale co-writing mini-game
