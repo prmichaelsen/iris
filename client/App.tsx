@@ -77,10 +77,11 @@ export default function App({ user, signOut }: AppProps) {
   // they don't get yanked back.
   const virtuosoRef = useRef<VirtuosoHandle>(null)
   const [atBottom, setAtBottom] = useState(true)
+  const atBottomRef = useRef(true)
 
   const scrollToBottom = useCallback(() => {
     requestAnimationFrame(() => {
-      virtuosoRef.current?.scrollToIndex({ index: 'LAST', align: 'end', behavior: 'smooth' })
+      virtuosoRef.current?.scrollToIndex({ index: 'LAST', align: 'end', behavior: 'auto' })
     })
   }, [])
 
@@ -293,12 +294,6 @@ export default function App({ user, signOut }: AppProps) {
     return items
   }, [history, partial])
 
-  useEffect(() => {
-    if (!atBottom) return
-    if (!partial) return
-    virtuosoRef.current?.scrollToIndex({ index: 'LAST', align: 'end', behavior: 'auto' })
-  }, [partial, atBottom])
-
   const reset = () => {
     setHistory([])
     partialRef.current = ''
@@ -370,9 +365,18 @@ export default function App({ user, signOut }: AppProps) {
           className="transcript"
           data={displayItems}
           initialTopMostItemIndex={Math.max(displayItems.length - 1, 0)}
-          atBottomStateChange={setAtBottom}
+          atBottomStateChange={(b) => { atBottomRef.current = b; setAtBottom(b) }}
           atBottomThreshold={48}
           followOutput={(isAtBottom) => (isAtBottom ? 'auto' : false)}
+          totalListHeightChanged={() => {
+            if (atBottomRef.current) {
+              virtuosoRef.current?.scrollToIndex({
+                index: displayItems.length - 1,
+                align: 'end',
+                behavior: 'auto',
+              })
+            }
+          }}
           computeItemKey={(_index, item) => (item.type === 'turn' ? item.key : '__partial__')}
           itemContent={(_index, item) => {
             if (item.type === 'partial') {
