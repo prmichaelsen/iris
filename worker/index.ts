@@ -44,6 +44,7 @@ function targetPrompt(nativeName: string, englishName: string): string {
 }
 
 import type { VocabCard } from './tools'
+import { getCharacter, type Character } from './characters'
 
 function vocabBlock(cards: VocabCard[]): string {
   if (cards.length === 0) return ''
@@ -57,7 +58,18 @@ function vocabBlock(cards: VocabCard[]): string {
 function buildSystemPrompt(
   targetLang: { code: string; name: string; english: string } | null,
   vocab: VocabCard[] = [],
+  character?: Character,
 ): string {
+  // If a character is provided, use their custom system prompt
+  if (character && character.additional_instructions) {
+    const charPrompt = character.additional_instructions
+    const langPrompt = targetLang
+      ? targetPrompt(targetLang.name, targetLang.english)
+      : NO_TARGET_PROMPT
+    return `${charPrompt}\n\n${langPrompt}${vocabBlock(vocab)}`
+  }
+
+  // Default Iris prompt (backward compatibility)
   const base = targetLang
     ? `${BASE_PROMPT}\n\n${targetPrompt(targetLang.name, targetLang.english)}`
     : `${BASE_PROMPT}\n\n${NO_TARGET_PROMPT}`
@@ -284,6 +296,41 @@ async function handleWebSocket(request: Request, env: Env): Promise<Response> {
       : null
   let nextLanguage: string | undefined = targetLang?.code
 
+  // Load character state from session (or use default)
+  const sessionState = await env.DB
+    .prepare('SELECT active_character, active_quest, current_region, active_voice_id FROM sessions WHERE user_id = ? ORDER BY created_at DESC LIMIT 1')
+    .bind(userId)
+    .first<{
+      active_character: string | null
+      active_quest: string | null
+      current_region: string | null
+      active_voice_id: string | null
+    }>()
+
+  let activeCharacterId = sessionState?.active_character || 'iris'
+  let activeQuest = sessionState?.active_quest || null
+  let currentRegion = sessionState?.current_region || 'berlin'
+  let activeVoiceId = sessionState?.active_voice_id || DEFAULT_VOICE_ID
+
+  // Load the character definition
+  let activeCharacter = getCharacter(activeCharacterId) || getCharacter('iris')!
+
+  // Sync voice ID with character (in case they got out of sync)
+  if (activeCharacter.voice_id !== activeVoiceId) {
+    activeVoiceId = activeCharacter.voice_id
+  }
+
+  // Notify client of current character and voice
+  server.send(
+    JSON.stringify({
+      type: 'character_state',
+      character_id: activeCharacterId,
+      voice_id: activeVoiceId,
+      quest_id: activeQuest,
+      region: currentRegion,
+    }),
+  )
+
   // Pending widget state — at most one widget active per connection.
   // When a widget is pending, the promise resolves with the user's answers
   // or rejects on timeout/cancel.
@@ -350,7 +397,7 @@ async function handleWebSocket(request: Request, env: Env): Promise<Response> {
           // Retake: treat as a new voice turn with a retake request
           const retakeText = 'Please start another round of the same type of quiz.'
           history.push({ role: 'user', content: retakeText })
-          await persistMessage(env.DB, conversationId, 'user', retakeText)
+          await persistMessage(env.DB, conversationId, 'user', retakeText, 'user')
 
           // Re-use the same tool-use loop as a normal voice turn
           const vocab = targetLang ? await pickVocab(env.DB, userId, targetLang.code, 5) : []
@@ -362,7 +409,7 @@ async function handleWebSocket(request: Request, env: Env): Promise<Response> {
             const stream = anthropic.messages.stream({
               model: MODEL,
               max_tokens: 1024,
-              system: buildSystemPrompt(targetLang, vocab),
+              system: buildSystemPrompt(targetLang, vocab, activeCharacter),
               messages: sanitizeToolMessages(history),
               ...(tools.length > 0 ? { tools } : {}),
             })
@@ -393,9 +440,9 @@ async function handleWebSocket(request: Request, env: Env): Promise<Response> {
             if (fullAssistantText.trim()) blocks.push({ type: 'text', text: fullAssistantText })
             blocks.push(...turnWidgetBlocks)
             history.push({ role: 'assistant', content: fullAssistantText || '(widget interaction)' })
-            await persistMessage(env.DB, conversationId, 'assistant', turnWidgetBlocks.length > 0 ? blocks : fullAssistantText)
+            await persistMessage(env.DB, conversationId, 'assistant', turnWidgetBlocks.length > 0 ? blocks : fullAssistantText, activeCharacterId)
           }
-          if (fullAssistantText.trim()) await streamTTS(fullAssistantText, server, env)
+          if (fullAssistantText.trim()) await streamTTS(fullAssistantText, server, env, activeVoiceId)
           send({ type: 'done' })
           return
         } else if (msg.type === 'language') {
@@ -452,7 +499,7 @@ async function handleWebSocket(request: Request, env: Env): Promise<Response> {
       }
       send({ type: 'transcript', text: transcript })
       history.push({ role: 'user', content: transcript })
-      await persistMessage(env.DB, conversationId, 'user', transcript)
+      await persistMessage(env.DB, conversationId, 'user', transcript, 'user')
 
       // Pick vocabulary cards for this turn — injected into the system prompt
       const vocab = targetLang
@@ -469,7 +516,7 @@ async function handleWebSocket(request: Request, env: Env): Promise<Response> {
         const stream = anthropic.messages.stream({
           model: MODEL,
           max_tokens: 1024,
-          system: buildSystemPrompt(targetLang, vocab),
+          system: buildSystemPrompt(targetLang, vocab, activeCharacter),
           messages: sanitizeToolMessages(history),
           ...(tools.length > 0 ? { tools } : {}),
         })
@@ -537,12 +584,13 @@ async function handleWebSocket(request: Request, env: Env): Promise<Response> {
           conversationId,
           'assistant',
           turnWidgetBlocks.length > 0 ? blocks : fullAssistantText,
+          activeCharacterId,
         )
       }
 
       // TTS the text response (skip if the turn was pure tool calls with no text)
       if (fullAssistantText.trim()) {
-        await streamTTS(fullAssistantText, server, env)
+        await streamTTS(fullAssistantText, server, env, activeVoiceId)
       }
 
       // Mark vocab as seen
@@ -601,8 +649,7 @@ async function transcribe(
   return (json.text ?? '').trim()
 }
 
-async function streamTTS(text: string, ws: WebSocket, env: Env): Promise<void> {
-  const voiceId = env.ELEVENLABS_VOICE_ID || DEFAULT_VOICE_ID
+async function streamTTS(text: string, ws: WebSocket, env: Env, voiceId: string = DEFAULT_VOICE_ID): Promise<void> {
   const url = `${ELEVEN_API}/text-to-speech/${voiceId}/stream?output_format=mp3_44100_128`
   const res = await fetchWithRetry(url, () => ({
     method: 'POST',
@@ -1019,6 +1066,45 @@ async function markVocabSeen(
   await db.batch(stmts)
 }
 
+// ---- Session state management ----
+
+/**
+ * Update session character state when switching between characters.
+ * Call this when a quest triggers a character change, or when explicitly switching characters.
+ *
+ * Example usage:
+ *   const newCharacter = getCharacter('karl')
+ *   if (newCharacter) {
+ *     await updateSessionCharacterState(env.DB, userId, 'karl', newCharacter.voice_id, questId, 'berlin')
+ *     activeCharacterId = 'karl'
+ *     activeCharacter = newCharacter
+ *     activeVoiceId = newCharacter.voice_id
+ *     send({ type: 'character_state', character_id: 'karl', voice_id: newCharacter.voice_id, quest_id: questId, region: 'berlin' })
+ *   }
+ */
+async function updateSessionCharacterState(
+  db: D1Database,
+  userId: string,
+  characterId: string,
+  voiceId: string,
+  questId: string | null = null,
+  region: string = 'berlin',
+): Promise<void> {
+  // Update the most recent session for this user
+  await db
+    .prepare(
+      `UPDATE sessions
+       SET active_character = ?,
+           active_voice_id = ?,
+           active_quest = ?,
+           current_region = ?
+       WHERE user_id = ?
+       AND token IN (SELECT token FROM sessions WHERE user_id = ? ORDER BY created_at DESC LIMIT 1)`,
+    )
+    .bind(characterId, voiceId, questId, region, userId, userId)
+    .run()
+}
+
 // ---- Conversation persistence (D1) ----
 
 async function getOrCreateActiveConversation(db: D1Database, userId: string): Promise<string> {
@@ -1086,14 +1172,15 @@ async function persistMessage(
   conversationId: string,
   role: 'user' | 'assistant',
   content: string | ContentBlock[],
+  characterId: string = 'iris',
 ): Promise<void> {
   const id = newId()
   const t = nowSec()
   const serialized = typeof content === 'string' ? content : JSON.stringify(content)
   await db.batch([
     db
-      .prepare('INSERT INTO messages (id, conversation_id, role, content, created_at) VALUES (?, ?, ?, ?, ?)')
-      .bind(id, conversationId, role, serialized, t),
+      .prepare('INSERT INTO messages (id, conversation_id, role, content, character, created_at) VALUES (?, ?, ?, ?, ?, ?)')
+      .bind(id, conversationId, role, serialized, characterId, t),
     db.prepare('UPDATE conversations SET updated_at = ? WHERE id = ?').bind(t, conversationId),
   ])
 }
