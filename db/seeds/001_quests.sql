@@ -71,6 +71,13 @@ INSERT INTO quests (id, name_de, name_en, description_de, description_en, catego
   ('quest_lehrers_pet', 'Lehrer''s Pet', 'Teacher''s Pet', 'Vervollständige 5 Lektionen ohne Fehler', 'Complete 5 lessons without getting any wrong', 'lesson', NULL, '[1]', 300, 0, 0);
 
 -- ============================================
+-- NARRATIVE CHARACTER QUESTS
+-- ============================================
+
+INSERT INTO quests (id, name_de, name_en, description_de, description_en, category, badge_skill, tier_thresholds, points_reward, is_repeatable, is_hidden, character_id, success_criteria) VALUES
+  ('erste_bestellung', 'Erste Bestellung', 'First Order', 'Bestelle beim ungeduldigen Bäcker Karl in Berlin', 'Order from impatient Berlin baker Karl', 'narrative', NULL, '[1]', 150, 0, 0, 'char_karl_baker', '{"max_timeouts": 3, "timer_seconds": 5, "success_condition": "Complete order without 3 timeouts"}');
+
+-- ============================================
 -- PERSONALITY/CULTURAL QUESTS
 -- ============================================
 
@@ -80,7 +87,8 @@ INSERT INTO quests (id, name_de, name_en, description_de, description_en, catego
   ('quest_komplimente_kuenstler', 'Komplimente-Künstler', 'Compliment Artist', 'Meistere Komplimente auf Deutsch', 'Master giving compliments in German', 'cultural', NULL, '[1]', 125, 0, 0),
   ('quest_beschwerdefuehrer', 'Beschwerdeführer', 'Complainer', 'Meistere Beschwerde-Vokabular', 'Master complaint vocabulary', 'cultural', NULL, '[1]', 125, 0, 0),
   ('quest_baecker_freund', 'Bäcker-Freund', 'Baker''s Friend', 'Meistere Bäckerei-Bestellung (Brötchen, Brezel, etc.)', 'Master bakery ordering (Brötchen, Brezel, etc.)', 'cultural', NULL, '[1]', 100, 0, 0),
-  ('quest_puenktlich', 'Pünktlich!', 'Punctual!', 'Vervollständige Übungen zur geplanten Zeit 5 Tage hintereinander', 'Complete exercises at scheduled time 5 days in a row', 'cultural', NULL, '[1]', 150, 0, 0);
+  ('quest_puenktlich', 'Pünktlich!', 'Punctual!', 'Vervollständige Übungen zur geplanten Zeit 5 Tage hintereinander', 'Complete exercises at scheduled time 5 days in a row', 'cultural', NULL, '[1]', 150, 0, 0),
+  ('quest_mila_gallery_inspiration', 'Galerie-Inspiration', 'Gallery Inspiration', 'Besuche eine Berliner Galerie und diskutiere Kunst auf Deutsch', 'Visit a Berlin gallery and discuss art in German', 'cultural', NULL, '[1]', 200, 0, 0);
 
 -- ============================================
 -- META/SYSTEM QUESTS

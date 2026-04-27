@@ -18,6 +18,17 @@ import {
 } from './auth'
 import { getTools, executeToolCall, pickVocab, newId, nowSec, type Env, type PendingWidget } from './tools'
 import { sanitizeToolMessages } from './sanitize-tool-messages'
+import {
+  getOrCreateConversationState,
+  incrementStrike,
+  resetStrikes,
+  recordUserResponse,
+  clearConversationState,
+  characterUsesTimer,
+  getCharacterTimerConfig,
+  type ConversationState,
+} from './conversation-state'
+import { updateSessionCharacterState } from './session-state'
 
 const ELEVEN_API = 'https://api.elevenlabs.io/v1'
 const MODEL = 'claude-opus-4-7'
@@ -44,6 +55,7 @@ function targetPrompt(nativeName: string, englishName: string): string {
 }
 
 import type { VocabCard } from './tools'
+import { getCharacter, type Character } from './characters'
 
 function vocabBlock(cards: VocabCard[]): string {
   if (cards.length === 0) return ''
@@ -57,7 +69,18 @@ function vocabBlock(cards: VocabCard[]): string {
 function buildSystemPrompt(
   targetLang: { code: string; name: string; english: string } | null,
   vocab: VocabCard[] = [],
+  character?: Character,
 ): string {
+  // If a character is provided, use their custom system prompt
+  if (character && character.additional_instructions) {
+    const charPrompt = character.additional_instructions
+    const langPrompt = targetLang
+      ? targetPrompt(targetLang.name, targetLang.english)
+      : NO_TARGET_PROMPT
+    return `${charPrompt}\n\n${langPrompt}${vocabBlock(vocab)}`
+  }
+
+  // Default Iris prompt (backward compatibility)
   const base = targetLang
     ? `${BASE_PROMPT}\n\n${targetPrompt(targetLang.name, targetLang.english)}`
     : `${BASE_PROMPT}\n\n${NO_TARGET_PROMPT}`
@@ -284,6 +307,59 @@ async function handleWebSocket(request: Request, env: Env): Promise<Response> {
       : null
   let nextLanguage: string | undefined = targetLang?.code
 
+  // Load character state from session (or use default)
+  const sessionState = await env.DB
+    .prepare('SELECT active_character, active_quest, current_region, active_voice_id FROM sessions WHERE user_id = ? ORDER BY created_at DESC LIMIT 1')
+    .bind(userId)
+    .first<{
+      active_character: string | null
+      active_quest: string | null
+      current_region: string | null
+      active_voice_id: string | null
+    }>()
+
+  let activeCharacterId = sessionState?.active_character || 'iris'
+  let activeQuest = sessionState?.active_quest || null
+  let currentRegion = sessionState?.current_region || 'berlin'
+  let activeVoiceId = sessionState?.active_voice_id || DEFAULT_VOICE_ID
+
+  // Load the character definition
+  let activeCharacter = getCharacter(activeCharacterId) || getCharacter('iris')!
+
+  // Sync voice ID with character (in case they got out of sync)
+  if (activeCharacter.voice_id !== activeVoiceId) {
+    activeVoiceId = activeCharacter.voice_id
+  }
+
+  // Notify client of current character and voice
+  server.send(
+    JSON.stringify({
+      type: 'character_state',
+      character_id: activeCharacterId,
+      voice_id: activeVoiceId,
+      quest_id: activeQuest,
+      region: currentRegion,
+    }),
+  )
+
+  // Find or create the user's active conversation, then load history from D1.
+  const conversationId = await getOrCreateActiveConversation(env.DB, userId)
+
+  // Initialize conversation state for strike tracking
+  const conversationState = getOrCreateConversationState(conversationId, activeCharacterId, activeQuest || undefined)
+
+  // Send timer config to client if this character uses timers
+  const timerDuration = getCharacterTimerConfig(activeCharacterId)
+  if (timerDuration !== null) {
+    server.send(
+      JSON.stringify({
+        type: 'timer_config',
+        enabled: true,
+        duration_ms: timerDuration,
+      }),
+    )
+  }
+
   // Pending widget state — at most one widget active per connection.
   // When a widget is pending, the promise resolves with the user's answers
   // or rejects on timeout/cancel.
@@ -295,8 +371,7 @@ async function handleWebSocket(request: Request, env: Env): Promise<Response> {
     correctMap: Map<string, { correct_index: number; correct_answer: string; word: string }>
   } = { widgetId: null, resolve: null, reject: null, timer: null, correctMap: new Map() }
 
-  // Find or create the user's active conversation, then load history from D1.
-  const conversationId = await getOrCreateActiveConversation(env.DB, userId)
+  // Load history from D1
   const history: Anthropic.MessageParam[] = await loadHistory(env.DB, conversationId)
   console.log(`[iris] loaded ${history.length} prior messages for conversation ${conversationId}`)
 
@@ -338,6 +413,54 @@ async function handleWebSocket(request: Request, env: Env): Promise<Response> {
             .prepare('DELETE FROM messages WHERE conversation_id = ?')
             .bind(conversationId)
             .run()
+          // Clear conversation state on reset
+          clearConversationState(conversationId)
+        } else if (msg.type === 'timeout') {
+          // User failed to respond in time (client-side timeout detection)
+          const state = incrementStrike(conversationId)
+          if (!state) return
+
+          console.log(`[iris] timeout strike ${state.strikes}/${state.maxStrikes} for conversation ${conversationId}`)
+
+          // Notify client of strike count
+          send({ type: 'strike', strikes: state.strikes, max_strikes: state.maxStrikes })
+
+          if (state.strikes >= state.maxStrikes) {
+            // Quest failed — inject failure message into history
+            // Karl will say "NÄCHSTER!" via the quest conditions prompt
+            const failureMessage = 'The user did not respond in time. This is strike 3.'
+            history.push({ role: 'user', content: failureMessage })
+            await persistMessage(env.DB, conversationId, 'user', failureMessage, 'system')
+
+            // Trigger assistant response (Karl will say NÄCHSTER!)
+            const vocab = targetLang ? await pickVocab(env.DB, userId, targetLang.code, 5) : []
+            const tools = getTools(targetLang)
+            const stream = anthropic.messages.stream({
+              model: MODEL,
+              max_tokens: 512,
+              system: buildSystemPrompt(targetLang, vocab, activeCharacter),
+              messages: sanitizeToolMessages(history),
+              ...(tools.length > 0 ? { tools } : {}),
+            })
+
+            let failureText = ''
+            stream.on('text', (delta) => {
+              failureText += delta
+              send({ type: 'response_text', delta })
+            })
+
+            await stream.finalMessage()
+
+            if (failureText.trim()) {
+              history.push({ role: 'assistant', content: failureText })
+              await persistMessage(env.DB, conversationId, 'assistant', failureText, activeCharacterId)
+              await streamTTS(failureText, server, env, activeVoiceId)
+            }
+
+            send({ type: 'quest_failed', reason: 'timeout', strikes: state.strikes })
+            send({ type: 'done' })
+          }
+          return
         } else if (msg.type === 'widget_response' && pendingWidget.widgetId === msg.widget_id && pendingWidget.resolve) {
           if (pendingWidget.timer) clearTimeout(pendingWidget.timer)
           // Handle both array answers (matching/gender-pick) and single answer (freeform)
@@ -350,7 +473,7 @@ async function handleWebSocket(request: Request, env: Env): Promise<Response> {
           // Retake: treat as a new voice turn with a retake request
           const retakeText = 'Please start another round of the same type of quiz.'
           history.push({ role: 'user', content: retakeText })
-          await persistMessage(env.DB, conversationId, 'user', retakeText)
+          await persistMessage(env.DB, conversationId, 'user', retakeText, 'user')
 
           // Re-use the same tool-use loop as a normal voice turn
           const vocab = targetLang ? await pickVocab(env.DB, userId, targetLang.code, 5) : []
@@ -362,7 +485,7 @@ async function handleWebSocket(request: Request, env: Env): Promise<Response> {
             const stream = anthropic.messages.stream({
               model: MODEL,
               max_tokens: 1024,
-              system: buildSystemPrompt(targetLang, vocab),
+              system: buildSystemPrompt(targetLang, vocab, activeCharacter),
               messages: sanitizeToolMessages(history),
               ...(tools.length > 0 ? { tools } : {}),
             })
@@ -381,7 +504,7 @@ async function handleWebSocket(request: Request, env: Env): Promise<Response> {
               const result = await executeToolCall(
                 block.name,
                 block.input as Record<string, unknown>,
-                { env, userId, server, send, targetLang, turnWidgetBlocks, pendingWidget },
+                { env, userId, server, send, targetLang, turnWidgetBlocks, pendingWidget, conversationHistory: history },
               )
               toolResults.push({ type: 'tool_result', tool_use_id: block.id, content: result })
             }
@@ -393,9 +516,9 @@ async function handleWebSocket(request: Request, env: Env): Promise<Response> {
             if (fullAssistantText.trim()) blocks.push({ type: 'text', text: fullAssistantText })
             blocks.push(...turnWidgetBlocks)
             history.push({ role: 'assistant', content: fullAssistantText || '(widget interaction)' })
-            await persistMessage(env.DB, conversationId, 'assistant', turnWidgetBlocks.length > 0 ? blocks : fullAssistantText)
+            await persistMessage(env.DB, conversationId, 'assistant', turnWidgetBlocks.length > 0 ? blocks : fullAssistantText, activeCharacterId)
           }
-          if (fullAssistantText.trim()) await streamTTS(fullAssistantText, server, env)
+          if (fullAssistantText.trim()) await streamTTS(fullAssistantText, server, env, activeVoiceId)
           send({ type: 'done' })
           return
         } else if (msg.type === 'language') {
@@ -452,7 +575,15 @@ async function handleWebSocket(request: Request, env: Env): Promise<Response> {
       }
       send({ type: 'transcript', text: transcript })
       history.push({ role: 'user', content: transcript })
-      await persistMessage(env.DB, conversationId, 'user', transcript)
+      await persistMessage(env.DB, conversationId, 'user', transcript, 'user')
+
+      // Record user response timestamp (reset timer, strikes NOT reset per quest rules)
+      recordUserResponse(conversationId)
+
+      // Stop timer on user response
+      if (characterUsesTimer(activeCharacterId)) {
+        send({ type: 'timer_stop' })
+      }
 
       // Pick vocabulary cards for this turn — injected into the system prompt
       const vocab = targetLang
@@ -469,7 +600,7 @@ async function handleWebSocket(request: Request, env: Env): Promise<Response> {
         const stream = anthropic.messages.stream({
           model: MODEL,
           max_tokens: 1024,
-          system: buildSystemPrompt(targetLang, vocab),
+          system: buildSystemPrompt(targetLang, vocab, activeCharacter),
           messages: sanitizeToolMessages(history),
           ...(tools.length > 0 ? { tools } : {}),
         })
@@ -510,7 +641,7 @@ async function handleWebSocket(request: Request, env: Env): Promise<Response> {
           const result = await executeToolCall(
             block.name,
             block.input as Record<string, unknown>,
-            { env, userId, server, send, targetLang, turnWidgetBlocks, pendingWidget },
+            { env, userId, server, send, targetLang, turnWidgetBlocks, pendingWidget, conversationHistory: history },
           )
           toolResults.push({
             type: 'tool_result',
@@ -521,6 +652,49 @@ async function handleWebSocket(request: Request, env: Env): Promise<Response> {
 
         // Feed tool results back as a user message
         history.push({ role: 'user', content: toolResults })
+
+        // Refresh session state in case a tool (quests.activate / quests.complete /
+        // regions.travel) mutated it. Keeps local closure vars in sync with DB,
+        // and handles 3-strike lifecycle per spec.
+        const refreshed = await env.DB
+          .prepare(
+            'SELECT active_character, active_quest, current_region, active_voice_id FROM sessions WHERE user_id = ? ORDER BY created_at DESC LIMIT 1',
+          )
+          .bind(userId)
+          .first<{
+            active_character: string | null
+            active_quest: string | null
+            current_region: string | null
+            active_voice_id: string | null
+          }>()
+
+        if (refreshed) {
+          const nextCharacterId = refreshed.active_character || 'iris'
+          const nextQuest = refreshed.active_quest
+          const nextRegion = refreshed.current_region || currentRegion
+
+          // Quest activated (new quest started) — reset strikes per spec R15a
+          if (nextQuest && nextQuest !== activeQuest) {
+            resetStrikes(conversationId)
+          }
+          // Quest completed (no longer active) — clear per-conversation state
+          if (!nextQuest && activeQuest) {
+            clearConversationState(conversationId)
+            // Recreate a fresh conversation-state entry for the returning-to-Iris context
+            getOrCreateConversationState(conversationId, nextCharacterId, undefined)
+          }
+
+          if (nextCharacterId !== activeCharacterId) {
+            const nextCharacter = getCharacter(nextCharacterId) || getCharacter('iris')!
+            activeCharacter = nextCharacter
+            activeCharacterId = nextCharacterId
+            activeVoiceId = refreshed.active_voice_id || nextCharacter.voice_id
+          } else if (refreshed.active_voice_id && refreshed.active_voice_id !== activeVoiceId) {
+            activeVoiceId = refreshed.active_voice_id
+          }
+          activeQuest = nextQuest
+          currentRegion = nextRegion
+        }
       }
 
       // Persist the assistant turn — as content blocks if widgets were involved
@@ -537,12 +711,18 @@ async function handleWebSocket(request: Request, env: Env): Promise<Response> {
           conversationId,
           'assistant',
           turnWidgetBlocks.length > 0 ? blocks : fullAssistantText,
+          activeCharacterId,
         )
       }
 
       // TTS the text response (skip if the turn was pure tool calls with no text)
       if (fullAssistantText.trim()) {
-        await streamTTS(fullAssistantText, server, env)
+        await streamTTS(fullAssistantText, server, env, activeVoiceId)
+      }
+
+      // If this character uses timer pressure, signal client to start countdown
+      if (characterUsesTimer(activeCharacterId)) {
+        send({ type: 'timer_start' })
       }
 
       // Mark vocab as seen
@@ -601,8 +781,7 @@ async function transcribe(
   return (json.text ?? '').trim()
 }
 
-async function streamTTS(text: string, ws: WebSocket, env: Env): Promise<void> {
-  const voiceId = env.ELEVENLABS_VOICE_ID || DEFAULT_VOICE_ID
+async function streamTTS(text: string, ws: WebSocket, env: Env, voiceId: string = DEFAULT_VOICE_ID): Promise<void> {
   const url = `${ELEVEN_API}/text-to-speech/${voiceId}/stream?output_format=mp3_44100_128`
   const res = await fetchWithRetry(url, () => ({
     method: 'POST',
@@ -1086,14 +1265,15 @@ async function persistMessage(
   conversationId: string,
   role: 'user' | 'assistant',
   content: string | ContentBlock[],
+  characterId: string = 'iris',
 ): Promise<void> {
   const id = newId()
   const t = nowSec()
   const serialized = typeof content === 'string' ? content : JSON.stringify(content)
   await db.batch([
     db
-      .prepare('INSERT INTO messages (id, conversation_id, role, content, created_at) VALUES (?, ?, ?, ?, ?)')
-      .bind(id, conversationId, role, serialized, t),
+      .prepare('INSERT INTO messages (id, conversation_id, role, content, character, created_at) VALUES (?, ?, ?, ?, ?, ?)')
+      .bind(id, conversationId, role, serialized, characterId, t),
     db.prepare('UPDATE conversations SET updated_at = ? WHERE id = ?').bind(t, conversationId),
   ])
 }
