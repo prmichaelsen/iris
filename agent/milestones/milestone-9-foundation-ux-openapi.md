@@ -149,10 +149,11 @@ This milestone frontloads design decisions and API contracts to prevent rework d
    - Spacing/sizing standards
 
 8. **Task 8: Testing Strategy & Documentation** (4h)
-   - Define testing approach for gamification features
+   - Define TDD workflow (write tests first, then implement)
    - Document test case structure from spec
    - E2E test scenarios for vertical slices
    - Integration test requirements
+   - Setup watch mode and pre-commit hooks
    - Update README with M9 completion notes
 
 ---
@@ -167,7 +168,10 @@ This milestone frontloads design decisions and API contracts to prevent rework d
 - [ ] Base MCP tools callable from Claude conversation
 - [ ] `view_progress` returns mock data demonstrating structure
 - [ ] Visual design system includes SVG badge templates for all 6 tiers
+- [ ] TDD workflow documented (write tests first, implement second)
 - [ ] Testing strategy documented with example test cases
+- [ ] Watch mode setup for tests (run on file change)
+- [ ] Pre-commit hook configured (tests must pass before commit)
 - [ ] All artifacts committed to git
 
 ---

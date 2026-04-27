@@ -350,7 +350,7 @@ A: Automatic (backend job). API only provides: send (user → pen pal) and read 
 A: Return all collectibles for that pen pal. Locked items have `unlocked: false` and no `image_url` (or placeholder). UI shows as silhouettes.
 
 **Q: Should Foto unlock trigger image generation API call?**  
-A: No. Fotos are pre-generated and cached in R2. POST /api/fotos/unlock just creates UserFoto record. Image generation happens via separate admin/seeding process.
+A: No. Fotos are pre-generated and cached in R2. POST /api/fotos/unlock just creates UserFoto record. Image generation happens via separate admin/seeding process using nanobanana + Vertex API (same approach as scenecraft-engine). See `../scenecraft-engine` for reference implementation.
 
 **Q: How to handle Emma's reactions in fairy tale turns?**  
 A: Claude API call grades user's turn and detects trigger words (clock, Grimm tropes, etc.). Response includes `emma_reaction` string if triggered. Stored in FairyTaleTurn record.

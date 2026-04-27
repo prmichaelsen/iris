@@ -50,10 +50,32 @@ Create `agent/testing/strategy.gamification.md`:
 
 ## Overview
 
+**Test-Driven Development (TDD) approach**: Write tests FIRST based on spec requirements, then implement features to pass tests.
+
 Testing approach for gamification system across 3 layers:
 1. **Unit**: Individual functions, API endpoints, MCP tools
 2. **Integration**: D1 queries, OpenAPI validation, cross-system interactions
 3. **E2E**: Full user journeys via MCP tools and UI (when implemented)
+
+## TDD Workflow
+
+For every feature implementation (M10+):
+
+1. **Read spec requirement** (e.g., R1: Progress Tracking)
+2. **Read spec test cases** (e.g., first-drill-completion, xp-award-calculation)
+3. **Write test code** matching Given/When/Then structure
+4. **Run test** (expect failure - feature not implemented yet)
+5. **Implement feature** (minimal code to pass test)
+6. **Run test** (expect pass)
+7. **Refactor** (improve code quality while keeping tests green)
+8. **Commit** (test + implementation together)
+
+**Benefits:**
+- Catch regressions immediately (test suite runs on every change)
+- Validate state changes as features evolve
+- Ensure spec compliance (tests encode requirements)
+- Prevent accidental breakage of working features
+- Document expected behavior via executable tests
 
 ## Unit Testing
 
@@ -141,10 +163,15 @@ Target: 100% of R1-R30 covered by at least one test case.
 
 ## Continuous Testing
 
-- Run OpenAPI validation on every commit
-- Run D1 migrations on test database before deploy
-- MCP tool smoke tests in CI
-- E2E scenarios run pre-release
+- **Watch mode**: Tests run automatically on file change during development
+- **Pre-commit hook**: All tests must pass before commit allowed
+- **CI pipeline**: Run full test suite on every push
+  - OpenAPI validation
+  - Unit tests (API endpoints, MCP tools, business logic)
+  - Integration tests (D1 queries, cross-system)
+  - E2E scenarios (critical user journeys)
+- **D1 migrations**: Test database migration before production deploy
+- **Coverage tracking**: Maintain 80%+ code coverage, 100% requirement coverage (R1-R30)
 
 ```
 
@@ -277,7 +304,7 @@ npm run dev:server
 ## Key Design Decisions
 
 **Q: Unit tests before or after implementation?**  
-A: Define test cases in M9 (documentation), implement tests in M10+ as features are built. TDD approach where feasible.
+A: **BEFORE**. TDD approach: write tests first based on spec, then implement feature to pass tests. This is mandatory for M10+ (not optional "where feasible").
 
 **Q: Should E2E tests use real or mock backend?**  
 A: Real backend (local D1) for integration confidence. Mock only external APIs (Claude, ElevenLabs) to avoid rate limits.
@@ -292,9 +319,12 @@ A: Maintain coverage table in testing strategy doc. Update as tests are written.
 
 ## Notes
 
-- Spec provides 50 test cases - use as foundation
+- **TDD is mandatory for M10+**: Write tests first, implement second
+- Spec provides 50 test cases - use as foundation for test implementation
 - Vertical slice testing (M10) validates full stack before scaling
 - MCP tools enable testing without UI implementation
 - OpenAPI validation prevents API drift
 - Test coverage goal: 100% of R1-R30, 80%+ of code
 - Edge cases (concurrency, boundaries) documented in spec tests 44-62
+- Watch mode during development catches regressions immediately
+- Pre-commit hook prevents broken code from entering repo

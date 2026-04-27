@@ -299,3 +299,4 @@ A: Application logic, not database constraint. Query: `SELECT COUNT(*) FROM pen_
 - Indexes critical for performance (user_id on everything)
 - Seed data must match spec exactly (quest thresholds, character grading weights)
 - Migration versioning prevents conflicts across team
+- **Foto image generation**: Use nanobanana + Vertex API (same as scenecraft-engine). Pre-generate images and cache in R2. Store `generation_prompt` in fotos table for reference/regeneration. See `../scenecraft-engine` for implementation pattern.
