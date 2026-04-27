@@ -64,7 +64,7 @@ Mastery level MUST be calculated using multiple signals: accuracy rate (35%), co
 The system MUST support multiple quest categories: Core Skill Quests with badge progression, Achievement Quests (one-time), Streak Quests (repeatable), Fun/Hidden Quests, Lesson Quests, Personality/Cultural Quests, and Meta/System Quests.
 
 ### R4: Badge Tier Progression
-Every skill MUST have 6 badge tiers: Grey Star (Beginner), Bronze Medal (Experienced), Silver Shield (Intermediate), Gold Crown (Proficient), Diamond Ring (Conversational), Platinum Trophy (Fluent).
+Every skill MUST have 6 badge tiers with unified visual design. All badges are a star inside a circle (star slightly darker than circle) with chrome finish matching the tier: Grey (Beginner), Bronze (Experienced), Silver (Intermediate), Gold (Proficient), Diamond (Conversational), Platinum (Fluent).
 
 ### R5: Point Economy
 Users MUST earn points from drills (10-25 points), daily quests (50 points), weekly quests (200 points), lessons (150 points), region unlocks (500 points), and milestone achievements (100-500 points).
@@ -145,6 +145,46 @@ The system MUST NOT include quests or badges for failures. No "Fehler-Freund", "
 Max 1 pen pal notification per day, max 3 letters per week across all pen pals, no notifications if user inactive 7+ days, respect quiet hours (10pm-8am local time).
 
 ---
+
+## Visual Design
+
+### Badge Design System
+
+All badges follow a unified design pattern with tier-specific chrome finishes:
+
+**Base Structure:**
+- Circular background with chrome finish matching tier
+- Five-pointed star centered in circle
+- Star color is slightly darker than circle background (maintains tier color family)
+- Consistent size and proportions across all badges
+
+**Tier Specifications:**
+
+| Tier | Chrome Finish | Circle Color | Star Color | Visual Effect |
+|---|---|---|---|---|
+| Grey | Matte grey metal | `#8B8B8B` | `#6B6B6B` | Flat, beginner-friendly |
+| Bronze | Brushed bronze | `#CD7F32` | `#8B5A2B` | Warm metallic sheen |
+| Silver | Polished silver | `#C0C0C0` | `#A0A0A0` | Mirror-like reflection |
+| Gold | Polished gold | `#FFD700` | `#DAA520` | Rich, luxurious glow |
+| Diamond | Crystalline faceted | `#B9F2FF` | `#87CEEB` | Prismatic sparkle effect |
+| Platinum | Brushed platinum | `#E5E4E2` | `#C5C4C2` | Subtle iridescence |
+
+**Implementation Notes:**
+- SVG format for crisp scaling at all sizes
+- CSS filters or SVG gradients for chrome effects
+- Subtle animation on unlock: badge materializes with tier-appropriate shimmer
+- Progress ring around badge shows completion toward next tier (same chrome finish)
+- Hover state: subtle glow matching tier color
+
+**Badge Sizes:**
+- Small: 32px (in-line with text, quest lists)
+- Medium: 64px (badge collection, profile page)
+- Large: 128px (unlock animations, achievement notifications)
+
+**Accessibility:**
+- Each tier includes text label for screen readers
+- Color contrast ratios meet WCAG AA standards
+- Chrome effects are decorative only, not information-bearing
 
 ## Interfaces / Data Shapes
 
@@ -902,7 +942,8 @@ The core behavior contract: happy path, common bad paths, primary positive and n
 **When**: User completes 40 more flashcards (50 total)  
 **Then** (assertions):
 - **tier-upgraded**: Badge upgrades from Bronze to Silver
-- **visual-changed**: Badge icon changes to Silver Shield
+- **visual-changed**: Badge chrome changes from bronze to silver finish (star-in-circle design maintained)
+- **star-darker**: Star remains slightly darker than circle background
 - **new-threshold**: Progress now 50/100 toward Gold
 
 #### Test: daily-quest-completion (covers R3, R5)

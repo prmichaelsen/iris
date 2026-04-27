@@ -163,16 +163,22 @@ This prevents gaming the system — users need **true fluency across contexts**,
 
 #### Badge Tier Progression
 
-Every skill has 6 tiers of badges representing mastery levels:
+Every skill has 6 tiers of badges representing mastery levels. All badges share a unified visual design: a star inside a circle (star slightly darker than circle) with chrome finish matching the tier.
 
 ```
-Grey Star (Beginner) → 
-Bronze Medal (Experienced) → 
-Silver Shield (Intermediate) → 
-Gold Crown (Proficient) → 
-Diamond Ring (Conversational) → 
-Platinum Trophy (Fluent)
+Grey (Beginner - matte grey metal) → 
+Bronze (Experienced - brushed bronze) → 
+Silver (Intermediate - polished silver) → 
+Gold (Proficient - polished gold) → 
+Diamond (Conversational - crystalline faceted) → 
+Platinum (Fluent - brushed platinum with subtle iridescence)
 ```
+
+**Visual Design:**
+- Consistent star-in-circle shape across all tiers
+- Star is slightly darker shade within same color family as circle
+- Chrome effects differentiate tiers: matte → brushed → polished → crystalline → iridescent
+- Progress ring around badge shows advancement toward next tier
 
 #### Quest Categories
 
