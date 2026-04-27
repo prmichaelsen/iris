@@ -2,9 +2,21 @@
 
 All notable changes to Iris are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versioning follows [SemVer](https://semver.org/).
 
-## [Unreleased]
+## [0.10.0] - 2026-04-27
 
 ### Added
+- **M10 Berlin Vertical Slice (Karl + Mila E2E)** — foundation shipped end-to-end on prod
+  - **Character-switching architecture**: multi-speaker chat threads, session state tracks `active_character` / `active_quest` / `current_region` / `active_voice_id`. Voice ID swaps with character so Karl gets a Berlin male fast dialect, Mila gets Bella, Iris resumes her default on quest end.
+  - **Prompt injection framework** (inspired by memorycloud.chat): extensible `PromptInjector` registry with `canInject()` conditions and priority ordering. Five injectors ship: CharacterPersonality (only runs for non-Iris), QuestConditions (3-strike rules, relationship-tier timer math), ConversationEndDetector (auto-detects German goodbyes, triggers quest completion + Iris debrief), StudyList (injects user's practice words with inline-gloss rule), PinnedItems design in place for M7 task 3.
+  - **Consolidated MCP tools** following Anthropic best practice (fewer tools with action params): `regions` (list/travel/info), `quests` (list/activate/complete/details), `study_list` (add/remove/list/mark_used/mark_clarified), plus M9 tools `set_context`, `view_progress`, `debug_state`.
+  - **Timer pressure system**: 5s circular countdown UI for Karl conversations with 3-strikes failure (`NÄCHSTER!`); timer duration scales with relationship tier (Hostile 3s → Family no timer).
+  - **Claude conversation grading** (7 metrics, character-specific weights): comprehension, fluency, grammar, vocabulary, pronunciation, confidence, cultural_awareness. Karl emphasizes fluency (25%) + confidence (15%); Mila emphasizes vocabulary (25%) + cultural awareness (15%). Spec-accurate relationship delta (9–10 → +10, 5–5.9 → +2, 0–2.9 → −8), clamped [0, 100], with graceful fallback to neutral 5/10 on malformed Claude responses or timeout.
+  - **Karl der Bäcker**: Berlin male fast-dialect baker, 58yo, impatient speed/Impatience specialty. `Erste Bestellung` first-order quest available immediately in Berlin (spec R7 Berlin auto-unlock).
+  - **Mila pen pal system**: letter generation (Claude-personality-driven), attention score `(sent·3) + (read·1) + (engaged·2) − (days·0.5)` with 5-tier letter-frequency mapping, sticker collectible gifts, pen pal auto-unlock on Tier 2 quest completion (`mila_gallery_inspiration`). First letter scheduled 24h after unlock (Durable Object scheduler deferred to M11).
+- **Study list system (M7 task 0, retroactive)**: user-curated word practice via voice (`study_list` MCP tool — no UI needed). Priority math: static 0.65 insert, −0.01/day lazy decay applied at read time, interaction bumps (+0.02 for Iris use, +0.15 for user clarification request). Composite per-turn injection: top 20 by priority + random 20 from most-recent 50 + random 10 from tail (rank 21+), deduped → ~35–45 unique words injected. Mandatory inline-gloss format: "gerade (already)" every occurrence.
+- **Word hover translation popover (M7 task 1)**: hover any word in an Iris message to see article, lemma, CEFR-level badge, English gloss, and a bilingual example sentence. Desktop hover (150ms debounce, 200ms leave grace) + mobile tap (single-tap toggle, outside-click dismiss). Hybrid lookup: `word_definitions` cache → `vocab_items` → Claude Haiku fallback. Client-side session cache + server-side D1 cache. Theme-aware (dark/light via `prefers-color-scheme`). Killed the "stop and ask Iris what X means" friction entirely.
+- **Theme token catalog (`client/theme-tokens.ts`)**: 38 semantic tokens across 7 groups (brand, backgrounds, text, borders, status, widget, cefr) synthesized from a color audit of `client/styles.css`. Not yet consumed at runtime — this is the contract for a future CSS refactor + theme-swap logic + gamification theme-prize unlocks (spec R24 loot boxes). Pattern modeled after memorycloud.chat's design; reference spec copied to `agent/design/reference.custom-theme-editor.md`.
+- **M7 task specs**: task-2 Session Freshness Injector (fresh/resumed/mid-conversation buckets via elapsed-time context cue), task-3 Pinned Sentences + Concepts (separate from study list, fetched on-demand via `pinned_items` tool, count-only injection to keep prompt slim).
 - **M9 milestone planning (Foundation + UX + OpenAPI)**: comprehensive 2-week milestone with 8 tasks (~60 hours) establishing gamification foundation before vertical slice implementation
   - OpenAPI 3.0+ specification for all 40+ gamification endpoints (progress, quests, badges, points, map, characters, pen pals, collections)
   - UX patterns document covering 10 major surfaces (progress page, badges, map, character interactions, foto gallery, pen pal interface, collections)
@@ -23,8 +35,18 @@ All notable changes to Iris are documented here. Format follows [Keep a Changelo
 - **Image generation approach documented**: use nanobanana + Vertex API (same as scenecraft-engine) for Foto generation. Images pre-generated and cached in R2, not generated on unlock.
 
 ### Changed
+- **Prompt injector framework now wired into live system prompt**: `buildSystemPromptAsync()` invokes the registry on every Claude call, appending injector sections after the base character prompt. Previously the framework existed but wasn't consumed.
+- **Iris BASE_PROMPT**: added proactive tool-usage guidance for `quests`, `regions`, `study_list` so she volunteers the right tool at the right moment without needing users to name it.
+- **D1 migrations relocated** from `db/migrations/` to `migrations/` so Wrangler actually picks them up. The four M9/M10 migrations that silently missed prod (causing a `no such column: active_character` error) are now applied.
 - **MCP-first development strategy**: backend features testable via Claude conversations before UI exists. Enables parallel backend/frontend work and early E2E validation without waiting for UI implementation.
 - **UX design upfront, UI implementation later**: M9 defines interaction patterns and flows, M15 implements React components. Prevents blocking backend work on UI decisions.
+
+### Fixed
+- **Eight spec-drift issues in M10 integration**: relationship delta now uses spec formula instead of hardcoded 0.75 placeholder; session state actually persists on `regions.travel` / `quests.activate` / `quests.complete`; `quests.list` queries the `quests` table (not characters); Karl voice_id set (Adam placeholder until dedicated Berlin male fast voice is selected); grading falls back gracefully to neutral 5/10 on malformed JSON; 3-strike counter wired to WebSocket timeout events; `Character` type aligned across TS interface + injector consumer + DB seed; `quests.list` returns characters, not quests.
+- **Seed data orphans**: `penpal_karl` and 4 Saxony collectibles referenced `char_karl` which was renamed to `char_karl_baker` in M10. Removed orphans, marked TODO(M14) for Henrik-based Saxony pen pal.
+- **Mila drift**: character type conformance (region → region_id, profession_de/en, tier_thresholds, grading_weights), attention formula missing `engaged*2` term, letter-occasion naming (`responding_to_user` → `reconnect`), pen pal unlock flow was unimplemented (user could never reach Mila).
+- **Berlin always unlocked** (spec R7): `listQuests` and `activateQuest` treat Berlin as unlocked-by-default; other regions still gated by `user_regions`.
+- **Wrangler version promotion**: `wrangler deploy` was creating new versions but not promoting to 100% traffic automatically. Explicit `wrangler versions deploy <id> --yes` step added to the deploy flow.
 
 ## [0.9.0] - 2026-04-27
 
