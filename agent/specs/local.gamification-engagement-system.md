@@ -96,8 +96,11 @@ Any character-based subquest MUST unlock a revisitable location. On revisit, cha
 ### R14: Character Memory
 Each character MUST track: first meeting date & user level, last visit date & user level, current visit & user level, topics discussed, and drills suggested.
 
-### R15: Karl's Multi-Region Arc
-Karl der Bäcker MUST be a recurring benchmark character with 6 content-triggered discovery quests (one per region after Berlin), voice-only 5-second timer conversations, relationship scoring (0-100), and character-specific behaviors at each relationship tier.
+### R15: Character Relationship System
+All revisitable characters MUST use a generic relationship system with scoring (0-100), tier-based behaviors, and character-specific metadata. Each character is a mini-game with unique specialty: Karl (speed/impatience), Lena (slang/casual), Henrik (grammar precision + vocabulary sophistication).
+
+### R15a: Karl's Multi-Region Arc
+Karl der Bäcker MUST be a recurring benchmark character with 6 content-triggered discovery quests (one per region after Berlin), voice-only 5-second timer conversations, and metadata tracking regional bread discussions.
 
 ### R16: Fast Relationship Progression
 Karl's relationship MUST progress quickly: +10 for perfect (9-10/10), +8 excellent, +6 good, +4 okay, +2 rough, -3 poor, -8 terrible. Target: 8-10 perfect visits to reach 100.
@@ -105,8 +108,38 @@ Karl's relationship MUST progress quickly: +10 for perfect (9-10/10), +8 excelle
 ### R17: Claude Conversation Grading
 All character conversations MUST be graded by Claude using 7 metrics (0-10 each): comprehension, fluency, grammar, vocabulary, pronunciation, confidence, cultural_awareness. Each character MUST have weighted preferences.
 
-### R18: Karl's Weighted Grading
-Karl MUST weight: comprehension 20%, fluency 25%, grammar 10%, vocabulary 15%, pronunciation 10%, confidence 15%, cultural_awareness 5% (prioritizes speed and confidence over grammar).
+### R18: Character-Specific Grading Weights
+Each character MUST have unique grading weights matching their specialty:
+- **Karl** (speed/impatience): comprehension 20%, fluency 25%, grammar 10%, vocabulary 15%, pronunciation 10%, confidence 15%, cultural_awareness 5%
+- **Lena** (slang/casual): comprehension 15%, fluency 20%, grammar 5%, vocabulary 10%, pronunciation 15%, confidence 20%, cultural_awareness 15%
+- **Henrik** (grammar + vocabulary): comprehension 20%, fluency 10%, grammar 30%, vocabulary 30%, pronunciation 5%, confidence 5%, cultural_awareness 0%
+
+### R18a: Adaptive Character Difficulty
+All 9 characters (Karl + 8 pen pals) MUST have unique adaptive difficulty progressions based on relationship tier:
+- **Karl**: Idiom evolution (literal → common idioms → Berlin-specific idioms)
+- **Mila**: Art vocabulary (simple → critique vocabulary + metaphors + street slang mix)
+- **Thomas**: Spatial language (simple directions → complex spatial relations + Bavarian dialect) + faster speech in exciting situations
+- **Lena**: Slang progression (standard casual → heavy Hamburg slang with contractions)
+- **Klaus**: Sensory language (basic wine terms → sophisticated sensory vocabulary + subjunctive mood + philosophical metaphors)
+- **Emma**: Dual vocabulary (basic fairy tale → Grimm archaic + technical clockwork terms + mixed phrasing)
+- **Henrik**: Academic rigor (simple academic → philosophical vocabulary + perfect grammar expectations) - gets HARDER at high tiers (inverse)
+- **Sophie**: Austrian formality (standard polite → Viennese courtly + Austrian lexical differences + diminutive escalation)
+- **Marco**: Code-switching (Hochdeutsch → Swiss German/French/Italian mixing + perfectionist precision)
+
+### R18b: OpenAPI Specification Required
+Before implementing Phase 2+, the project MUST adopt OpenAPI 3.0+ specification for all API endpoints with code generation via openapi-generator or similar tooling. All endpoints in this spec MUST be formally defined in `openapi.yaml` with request/response schemas, error codes, and authentication requirements.
+
+### R19: Character Mini-Games
+Each of the 9 characters (Karl + 8 pen pals) MUST unlock a unique mini-game at high relationship tiers (70-90+) that reinforces their specialty:
+- **Karl** (80+): Bread-Making Recipe Game - interactive step-by-step baking with timed actions, teaches cooking vocabulary
+- **Mila** (70+): Art Critique - describe artwork in German, graded on vocabulary richness and metaphorical thinking
+- **Thomas** (75+): Mountain Navigation - follow German directions on map interface, teaches spatial language
+- **Lena** (80+): Stadt-Land-Fluss (Categories Game) - rapid vocabulary recall competition with 10s timer
+- **Klaus** (85+): Wine Stories - interpret wine descriptions and expand poetically, create metaphors and use subjunctive mood for hypotheticals
+- **Emma** (80+): Fairy Tale Co-Writing - take turns writing an original fairy tale with Emma, she reacts excitedly to elements she loves (clocks, classic tropes, precise descriptions). Stories saved to "Märchenbuch" archive where users can revisit and see their progress over time (earlier stories show more errors). Teaches narrative structure, Präteritum, and creative thinking in German
+- **Henrik** (90+): Philosophical Debate - multi-turn debate requiring perfect grammar and sophisticated vocabulary (hardest mini-game)
+- **Sophie** (85+): Viennese Café Service - take orders using Austrian vocabulary and formal politeness
+- **Marco** (90+): Chocolate Making - follow code-switched instructions (Hochdeutsch/Swiss German/French/Italian) with Swiss precision
 
 ### R19: Iris Meta-Layer
 Iris MUST exist as omnipresent meta-layer guide who voices all game characters, provides help during conversations, analyzes performance post-conversation, preps users before tough challenges, and proactively suggests quests.
@@ -377,6 +410,7 @@ interface Character {
   profession_de: string;
   profession_en: string;
   personality: string;
+  specialty: string; // 'speed_impatience', 'slang_casual', 'grammar_precision', 'vocabulary_academic', 'cultural_context'
   language_style: string; // 'fast_berlin_dialect', 'patient', etc.
   voice_characteristics: string[];
   grading_weights: {
@@ -388,23 +422,35 @@ interface Character {
     confidence: number;
     cultural_awareness: number;
   };
+  tier_thresholds: number[]; // [20, 40, 60, 80, 100] or custom per character
+  tier_names: string[]; // ['hostile', 'cold', 'neutral', 'friendly', 'family'] or custom per character
+  difficulty_scaling: {
+    base_difficulty: number; // 1-10
+    increases_with_relationship: boolean; // true = gets harder as you get closer
+    adaptive_vocabulary: boolean; // true = uses simpler/complex words based on tier
+    adaptive_grammar: boolean; // true = uses simpler/complex grammar based on tier
+  };
 }
 
-// Karl Specific
-interface UserKarlRelationship {
+// Character Relationships (Generic)
+interface UserCharacterRelationship {
   user_id: string;
+  character_id: string;
   relationship_score: number; // 0-100
   first_visit_at: string;
   last_visit_at: string;
   visit_count: number;
-  tier: string; // 'hostile', 'cold', 'neutral', 'friendly', 'family'
-  bavarian_bread_discussed: boolean;
-  hamburg_bread_discussed: boolean;
-  rhine_bread_discussed: boolean;
-  blackforest_bread_discussed: boolean;
-  saxony_stollen_discussed: boolean;
-  master_test_passed: boolean;
+  tier: string; // character-specific tier names
+  metadata: Record<string, any>; // character-specific flags and data
+  created_at: string;
+  updated_at: string;
 }
+
+// Example metadata per character:
+// Karl: { bavarian_bread_discussed: true, hamburg_bread_discussed: false, master_test_passed: false }
+// Lena: { slang_tier: 2, vinyl_collection_discussed: ['Âme', 'Moderat'], harbor_tour_completed: true }
+// Henrik: { grammar_tier: 3, vocabulary_tier: 3, philosophy_discussed: true, ddr_stories_unlocked: true }
+// Emma: { fairy_tale_vocab_tier: 2, clockwork_terms_tier: 1, grimm_stories_discussed: ['Rotkäppchen'] }
 
 // Conversation Grading
 interface ConversationGrade {
@@ -462,6 +508,31 @@ interface ChatBuddy {
   personality: string;
   animation_set: string;
   unlock_method: string; // 'points', 'badge', 'loot_box'
+}
+
+// Fairy Tale Stories (Emma's Mini-Game)
+interface UserFairyTale {
+  id: string;
+  user_id: string;
+  title: string;
+  content: string; // full story text with turn markers
+  turn_count: number;
+  user_level_at_creation: number;
+  grammar_errors_count: number; // tracked for progress comparison
+  vocabulary_richness_score: number; // 0-100
+  created_at: string;
+  emma_reactions: string[]; // array of Emma's excited reactions during writing
+}
+
+interface FairyTaleTurn {
+  fairy_tale_id: string;
+  turn_number: number;
+  author: 'user' | 'emma';
+  content: string;
+  grammar_score: number; // Claude grading
+  vocabulary_score: number;
+  creativity_score: number;
+  emma_reaction: string | null; // if user turn triggered excitement
 }
 ```
 
@@ -1509,24 +1580,24 @@ Boundaries, unusual inputs, concurrency, idempotency, ordering, time-dependent b
 - **no-progress-comment**: Too soon to detect meaningful progress
 - **conversation-continues**: Normal interaction proceeds
 
-#### Test: karl-relationship-at-boundaries (covers R16)
+#### Test: character-relationship-at-boundaries (covers R15, R16)
 
-**Given**: Karl relationship at 100 (maximum)  
+**Given**: Character relationship at 100 (maximum)  
 **When**: User has another perfect conversation (+10)  
 **Then** (assertions):
 - **relationship-capped**: Stays at 100 (doesn't exceed)
 - **no-overflow**: No error or data corruption
-- **tier-maintained**: Remains in "Family" tier
-- **dialogue-consistent**: Karl still treats user as family
+- **tier-maintained**: Remains in highest tier for that character
+- **dialogue-consistent**: Character maintains highest-tier behavior
 
-#### Test: karl-relationship-zero-floor (covers R16)
+#### Test: character-relationship-zero-floor (covers R15)
 
-**Given**: Karl relationship at 5  
+**Given**: Character relationship at 5  
 **When**: User has terrible conversation (-8)  
 **Then** (assertions):
 - **relationship-floored**: Goes to 0 (minimum)
-- **hostile-tier**: Tier = "Hostile"
-- **kicked-out-immediately**: Karl refuses service
+- **lowest-tier**: Tier = character's lowest tier (e.g., "Hostile" for Karl)
+- **character-specific-behavior**: Character reacts according to their personality (Karl refuses service, Henrik becomes coldly dismissive)
 - **recovery-possible**: User can retry and rebuild from 0
 
 #### Test: karl-timeout-countdown-edge (covers R15)
@@ -1712,6 +1783,44 @@ Boundaries, unusual inputs, concurrency, idempotency, ordering, time-dependent b
 - **new-rewards**: User can earn badge again (or new variant)
 - **annual-recurrence**: Seasonal quests repeat yearly
 
+#### Test: henrik-vocabulary-progression (covers R15, R18a)
+
+**Given**:
+- User has Henrik relationship at 20 (low tier)
+- Henrik uses simple academic vocabulary
+
+**When**: User reaches relationship 85 (high tier)  
+**Then** (assertions):
+- **vocabulary-upgraded**: Henrik uses philosophical/literary terms (Dasein, Weltanschauung, Zeitgeist)
+- **difficulty-increased**: Claude grading expects more sophisticated responses
+- **grammar-complexity**: Uses subordinate clauses and complex sentence structures
+- **tier-appropriate**: Vocabulary matches relationship tier
+- **metadata-tracked**: `vocabulary_tier` and `grammar_tier` updated in metadata
+
+#### Test: lena-slang-progression (covers R15, R18a)
+
+**Given**:
+- User has Lena relationship at 25 (low tier)
+- Lena uses standard casual German
+
+**When**: User reaches relationship 75 (high tier)  
+**Then** (assertions):
+- **slang-unlocked**: Lena uses heavy Hamburg slang and casual contractions
+- **formality-dropped**: Uses more "Moin", "digga", "krass" style expressions
+- **cultural-awareness-weighted**: Grading emphasizes understanding slang context
+- **confidence-matters**: Hesitation penalized more heavily (confidence weight 20%)
+- **metadata-tracked**: `slang_tier` updated in metadata
+
+#### Test: character-adaptive-difficulty (covers R18a)
+
+**Given**: Character has `adaptive_vocabulary: true` and `adaptive_grammar: true`  
+**When**: User relationship increases from tier 1 to tier 4  
+**Then** (assertions):
+- **language-complexity-scales**: Character uses progressively more complex language
+- **grading-adjusts**: Claude expectations increase for vocabulary and grammar
+- **user-challenged**: Conversations feel harder at higher tiers (intentional)
+- **specialization-maintained**: Character's specialty becomes more pronounced (Henrik more academic, Lena more slangy)
+
 #### Test: karl-relationship-tier-boundary (covers R16)
 
 **Given**: Karl relationship at 59 (just below Neutral threshold of 60)  
@@ -1721,6 +1830,38 @@ Boundaries, unusual inputs, concurrency, idempotency, ordering, time-dependent b
 - **behavior-changed**: Timer increases from 5s to 7s
 - **dialogue-updated**: Karl says "Du schon wieder" instead of "What do you want?"
 - **threshold-exact**: Tier change happens at exactly 60
+
+---
+
+## Dependencies
+
+**Existing Systems:**
+- Widget system (local.widget-system.md) - Drills provide XP and quest progress
+- D1 database - Stores user progress, mastery scores, quest completion, pen pal conversations
+- WebSocket protocol - Real-time updates for XP bars, quest notifications, loot box animations
+- ElevenLabs TTS - Regional voice unlocks require TTS integration
+- Cloudflare Workers + Durable Objects - Pen pal letter scheduling, attention score calculation
+
+**External Services:**
+- Claude API - Pen pal letter generation, character conversations, conversation grading
+- Image Generation API (Midjourney/DALL-E/Stable Diffusion) - AI-generated Fotos
+- R2 Storage - Cache Fotos and voice audio permanently
+
+**Development Tooling (Required before Phase 2+):**
+- **OpenAPI 3.0+ specification** (`openapi.yaml`) - Formal API contract defining all endpoints
+- **OpenAPI code generator** (`openapi-generator-cli` or `@openapitools/openapi-generator-cli`) - Generate TypeScript client/server stubs from spec
+- Integration with existing Cloudflare Workers architecture
+- Migration strategy for existing ad-hoc endpoints to generated handlers
+
+**Rationale for OpenAPI Requirement:**
+Given the dramatic increase in API surface area (40+ new endpoints across progress, quests, badges, points, map, fotos, pen pals, characters, collectibles), manually maintaining TypeScript types and route handlers will become error-prone and unmaintainable. OpenAPI provides:
+- Single source of truth for API contract
+- Automatic TypeScript type generation (eliminates drift between client/server)
+- Built-in validation for requests/responses
+- Auto-generated API documentation
+- Easier testing via spec-driven test generation
+
+**Implementation Note:** Phase 1 (MVP) MAY proceed with manual endpoints, but OpenAPI MUST be adopted before Phase 2 to avoid technical debt.
 
 ---
 

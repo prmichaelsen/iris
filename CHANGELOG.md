@@ -4,7 +4,33 @@ All notable changes to Iris are documented here. Format follows [Keep a Changelo
 
 ## [Unreleased]
 
+### Added
+- **Character mini-games (9 total)**: each character unlocks unique mini-game at high relationship tier (70-90+) that reinforces their specialty and provides replay value:
+  - **Karl (80+)**: Bread-Making Recipe Game - interactive step-by-step baking with timed actions and Karl's coaching
+  - **Mila (70+)**: Art Critique - describe artwork and express opinions, graded on vocabulary richness and metaphorical thinking
+  - **Thomas (75+)**: Mountain Navigation - follow German directions on map interface with progressive spatial complexity
+  - **Lena (80+)**: Stadt-Land-Fluss (Categories Game) - competitive rapid vocabulary recall with 10-second timer and trash talk
+  - **Klaus (85+)**: Wine Stories - interpret wine descriptions and expand poetically with metaphors and subjunctive mood
+  - **Emma (80+)**: Fairy Tale Co-Writing - collaborative storytelling where Emma reacts excitedly to elements she loves (clocks, classic tropes, precision). Stories saved to "Märchenbuch" archive where users can revisit and benchmark progress (earlier stories show more errors, later stories show mastery). Teaches creative thinking in German, narrative structure, and Präteritum.
+  - **Henrik (90+)**: Philosophical Debate - multi-turn debate requiring perfect grammar and sophisticated vocabulary (hardest mini-game)
+  - **Sophie (85+)**: Viennese Café Service - take orders using Austrian vocabulary and formal politeness
+  - **Marco (90+)**: Chocolate Making - follow code-switched instructions (Hochdeutsch/Swiss German/French/Italian) with Swiss precision
+- **Märchenbuch (Fairy Tale Book) collection**: archive of all fairy tales co-written with Emma, includes creation date, user level at time, grammar/vocabulary scores for progress tracking. Visual benchmark showing improvement over time.
+- **OpenAPI 3.0+ requirement**: all API endpoints must be formally defined in `openapi.yaml` with code generation before Phase 2+ implementation. Rationale: 40+ new endpoints require single source of truth to prevent client/server type drift and enable automatic validation.
+- **Adaptive difficulty for all 9 characters**: each pen pal + Karl now has unique language progression tied to relationship tier:
+  - **Karl**: idiom evolution (literal → common → Berlin-specific idioms like "Dit is Berlin")
+  - **Mila**: artistic expression (simple → critique vocabulary + metaphors + street slang mix)
+  - **Thomas**: spatial language (simple directions → complex spatial relations + Bavarian dialect) + talks faster in exciting situations
+  - **Lena**: slang progression (standard casual → heavy Hamburg slang: "Moin", "digga", "krass")
+  - **Klaus**: sensory/poetic language (basic wine terms → sophisticated sensory + subjunctive + philosophical metaphors)
+  - **Emma**: dual vocabulary (basic fairy tale → Grimm archaic + clockwork technical terms, mixes both: "verzaubertes Zahnrad")
+  - **Henrik**: academic rigor (simple → philosophical vocab: Dasein, Weltanschauung) - inverse difficulty, gets HARDER at high tiers
+  - **Sophie**: Austrian formality (standard polite → Viennese courtly + Austrian lexical differences + escalating diminutives: -erl, -i)
+  - **Marco**: code-switching (Hochdeutsch → Swiss German/French/Italian mixing + perfectionist precision)
+
 ### Changed
+- **Character relationship system generalized**: replaced Karl-specific `UserKarlRelationship` table with generic `UserCharacterRelationship` supporting all revisitable characters. Each character is now a "mini-game" with unique specialty. Characters use flexible metadata field for character-specific tracking (regional bread discussions, slang tiers, philosophical concepts, etc.). Supports adaptive difficulty where characters scale language complexity based on relationship tier.
+- **Character grading weights formalized**: each character has unique Claude grading weights matching their specialty (Karl prioritizes fluency/confidence, Henrik prioritizes grammar/vocabulary, Lena prioritizes confidence/cultural awareness, etc.)
 - **Badge visual design unified**: all badge tiers now use consistent star-in-circle design with tier-specific chrome finishes (matte grey → brushed bronze → polished silver → polished gold → crystalline diamond → brushed platinum). Star is slightly darker than circle background. Replaces previous mixed iconography (Medal, Shield, Crown, Ring, Trophy).
 - **Pen pal collectible system redesign**: transformed generic stickers/loot boxes into narrative-integrated gifts from pen pals. Each of 8 pen pals sends themed collectibles matching their personality: Mila (hand-drawn stickers), Thomas (pressed alpine flowers & hiking patches), Lena (vintage vinyl records with YouTube/Bandcamp links), Klaus (wine bottle labels), Emma (mechanical curiosities & fairy tale trinkets), Henrik (historical postcards & DDR artifacts), Sophie (vintage coffee/tea tins), Marco (Swiss chocolates & desserts with cultural context). Quest rewards now say "Mila sent you a new sticker!" with personal messages instead of generic "You earned a reward!" — transforms game mechanics into friendship artifacts.
 - **Loot boxes reframed**: now Mila's "sticker packs" she sells at Berlin art markets ("Ich habe ein paar extra Sticker gedruckt für den Flohmarkt. Willst du einen?") — maintains narrative coherence, feels like supporting friend's art

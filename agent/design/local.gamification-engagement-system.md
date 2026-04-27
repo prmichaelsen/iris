@@ -446,48 +446,166 @@ Each region has **one special character** you can befriend through completing th
 - **Unlock:** Help her find inspiration for next gallery show (Tier 2 Berlin quest)
 - **Topics:** Art openings, Berlin politics, gentrification, graffiti spots, techno parties
 - **Recommendations:** Âme, Modeselektor (music), Lola rennt (film), Faserland (book)
+- **Character Mini-Game Specialty:** Creative/Artistic Expression
+  - Low relationship: Simple art descriptions (basic colors, shapes, emotions)
+  - High relationship: Art critique vocabulary (Komposition, Farbpalette, abstrakt, Pinselstrich), expects metaphorical thinking, asks you to describe feelings/impressions rather than literal observations
+  - Unique adaptive bit: Mixes art jargon with Berlin street slang (Berlin creative scene authenticity)
+  - Grading weights: Vocabulary 25%, Cultural Awareness 15%
+- **Mini-Game Unlocked at Relationship 70+:** Kunstkritik (Art Critique)
+  - Mila shows you artwork, graffiti, or street installations (AI-generated or curated images)
+  - You must describe what you see in German: colors, shapes, emotions, meaning
+  - Voice or text input accepted
+  - Claude grades your response on: vocabulary richness, metaphorical thinking, emotional insight, German fluency
+  - Mila responds to your critique: agrees, challenges, adds perspective
+  - Progressive difficulty: starts with simple images (Kandinsky abstracts), advances to complex street art
+  - Teaches: Descriptive vocabulary, adjectives, emotional/abstract vocabulary, art terminology, expressing opinions
 
 **Bavaria: Thomas** (Mountain Guide, 35)
 - **Personality:** Down-to-earth, traditional but open-minded, loves nature and beer
 - **Unlock:** Complete hiking trip learning Alpine culture (Tier 2 Bavaria)
 - **Topics:** Mountain weather, hiking routes, beer garden philosophy, Bavarian traditions, family life
 - **Recommendations:** LaBrassBanda (music), Wer früher stirbt ist länger tot (film), Rita Falk crime novels
+- **Character Mini-Game Specialty:** Directional/Spatial Language
+  - Low relationship: Simple directions (links, rechts, geradeaus, oben, unten)
+  - High relationship: Complex spatial relationships (südwestlich von, oberhalb der Baumgrenze, unterhalb des Gipfels), compass directions, elevation vocabulary, Bavarian dialect features
+  - Unique adaptive bit: Speaks faster when describing dangerous/exciting mountain situations (simulates real urgency)
+  - Grading weights: Vocabulary 20%, Comprehension 25%, Fluency 20%
+- **Mini-Game Unlocked at Relationship 75+:** Bergrettung (Mountain Navigation)
+  - Thomas gives you directions to a mountain hut/summit in German
+  - You must follow directions on a simple map interface (tap to move: links, rechts, geradeaus, zurück)
+  - Progressive complexity: simple (left/right) → intermediate (compass directions) → advanced (landmarks + elevation)
+  - Timed challenge: "Der Sturm kommt! Schneller!" (storm approaching)
+  - Teaches: Directional vocabulary, spatial prepositions, imperative commands, mountain/nature vocabulary
+  - Success: virtual summit photo unlock (Foto of the peak)
 
 **Hamburg: Lena** (Harbor Worker/DJ, 29)
 - **Personality:** Tough exterior, warm heart, loves electronic music and maritime history
 - **Unlock:** Help her find vintage records at Fischmarkt (Tier 2 Hamburg)
 - **Topics:** DJ sets, harbor gossip, northern German pride, rainy day moods, vinyl finds
 - **Recommendations:** Robin Schulz (music), Soul Kitchen (film), Tschick (book)
+- **Character Mini-Game Specialty:** Slang & casual speech
+  - Low relationship: Standard casual German, clear pronunciation
+  - High relationship: Heavy Hamburg slang ("Moin", "digga", "krass"), fast contractions, expects you to keep up with informal speech
+  - Grading weights: Confidence 20%, Cultural Awareness 15% (understanding slang context matters)
+- **Mini-Game Unlocked at Relationship 80+:** Stadt-Land-Fluss (German Categories Game)
+  - Lena picks a category (Städte, Essen, Tiere, Berufe, etc.) and a letter
+  - You must name items in that category starting with that letter
+  - Competitive: you vs. Lena, alternating turns with 10-second timer
+  - First person to repeat a word loses OR timeout loses
+  - Teaches: Rapid vocabulary recall, category-specific vocabulary, thinking in German under pressure
+  - Lena trash talks in Hamburg slang between rounds: "Zu langsam, digga!"
 
 **Rhine Valley: Klaus** (Winemaker, 52)
 - **Personality:** Philosophical, patient, storyteller, deeply connected to tradition and land
 - **Unlock:** Learn winemaking through family vineyard tour (Tier 2 Rhine)
 - **Topics:** Harvest seasons, family legacy, philosophy of slow living, wine pairings, local folklore
 - **Recommendations:** Beethoven (music), Das Boot (film), Hermann Hesse (Siddharta, Steppenwolf)
+- **Character Mini-Game Specialty:** Poetic/Sensory Descriptions
+  - Low relationship: Basic wine vocabulary (süß, trocken, rot, weiß, Wein, Traube)
+  - High relationship: Sophisticated sensory language (samtig, mineralisch, Bouquet, Abgang, Tannine), expects metaphorical descriptions, uses subjunctive mood for hypotheticals ("Wenn man diesen Wein probieren würde...")
+  - Unique adaptive bit: Speaks in philosophical wine metaphors about life/time/patience (wine as life wisdom)
+  - Grading weights: Vocabulary 30%, Cultural Awareness 15%, Grammar 20% (subjunctive mood mastery)
+- **Mini-Game Unlocked at Relationship 85+:** Weingeschichten (Wine Stories)
+  - Klaus shows you wine labels with tasting notes in German (color, aroma, taste descriptions)
+  - You must INTERPRET and EXPAND on the descriptions using metaphorical/philosophical language
+  - Example: "Dieser Riesling hat Noten von grünem Apfel und Honig" → You elaborate poetically: "Wie ein sonniger Herbstmorgen im Obstgarten..."
+  - Or Klaus describes a scenario: "Eine Familie feiert Weihnachten. Welcher Wein würde passen?" → You explain in subjunctive mood
+  - Claude grades on: sensory vocabulary expansion, metaphorical thinking, subjunctive mood usage, philosophical depth
+  - Klaus responds with his own metaphors and life wisdom
+  - Progressive difficulty: simple expansions → complex metaphors → philosophical wine parables
+  - Teaches: Sensory vocabulary, subjunctive mood (hypotheticals), metaphorical German, poetic expression, conditional sentences
 
 **Black Forest: Emma** (Clockmaker's Apprentice, 24)
 - **Personality:** Precise, curious, loves fairy tales and mechanical things, bit of a nerd
 - **Unlock:** Help repair historical cuckoo clock (Tier 2 Black Forest)
 - **Topics:** Clockwork mechanisms, fairy tale locations, forest hikes, apprenticeship challenges
 - **Recommendations:** AnnenMayKantereit (music), Die unendliche Geschichte (book), Grimm Märchen
+- **Character Mini-Game Specialty:** Technical Precision + Fairy Tale Vocabulary
+  - Low relationship: Basic fairy tale terms (Prinzessin, Hexe, Zauber) and simple clock parts (Uhr, Zeiger)
+  - High relationship: Grimm Brothers archaic vocabulary (verwünscht, Gemach, Knappe, alsbald), technical clockwork terms (Zahnrad, Unruh, Federhaus, Ankergang), expects precision in both domains
+  - Unique adaptive bit: Mixes fairy tale language with technical descriptions ("Das Zahnrad ist wie verzaubert" - the gear is like it's enchanted)
+  - Grading weights: Vocabulary 30%, Pronunciation 15% (archaic words are tricky)
+- **Mini-Game Unlocked at Relationship 80+:** Märchen Schreiben (Fairy Tale Co-Writing)
+  - You and Emma co-write an original fairy tale in German, taking turns adding to the story
+  - Emma starts with classic opening: "Es war einmal..." (Once upon a time...)
+  - You add 2-3 sentences continuing the story
+  - Emma responds with her addition (mixing whimsy with her clockmaker precision)
+  - **Emma's Reactions:** She gets excited when you add elements she loves:
+    - Clockwork/mechanical elements: "Oh! Eine Uhr! Das ist wunderbar!" (Oh! A clock! That's wonderful!)
+    - Classic fairy tale tropes: "Ja! Ein verwunschener Wald! Genau wie bei den Brüdern Grimm!"
+    - Precise descriptions: "So detailliert! Ich mag wie du das beschrieben hast!"
+    - Unexpected twists: "Ohhh, damit habe ich nicht gerechnet! Spannend!"
+  - Story builds over 8-12 turns until conclusion
+  - Claude grades each turn on: narrative coherence, fairy tale vocabulary, creative additions, Präteritum usage (fairy tale past tense), archaic/poetic language
+  - Emma's additions use Grimm Brothers vocabulary (verwünscht, Gemach, alsbald, Knappe) that you can learn by context
+  - Progressive difficulty: simple stories (princess, dragon) → complex narratives (moral lessons, metaphorical elements)
+  - **Story Archive:** All completed fairy tales saved to "Märchenbuch" (Fairy Tale Book) collection
+    - Can revisit and reread any previous story
+    - Stories show creation date and your German level at the time
+    - **Progress Benchmark:** Earlier stories show grammar errors/simpler vocabulary, later stories show mastery
+    - Visual comparison: "Your first story (3 months ago)" vs. "Your latest story" - tangible improvement evidence
+    - Can share favorite stories with other pen pals who react in character
+  - Teaches: Narrative structure, creative thinking in German, Präteritum (simple past), fairy tale vocabulary, archaic expressions, storytelling conventions
+  - Success: complete fairy tale saved to collection + Emma gives enthusiastic feedback on final story
 
 **Saxony: Henrik** (History Professor, 41)
-- **Personality:** Intellectual, witty, passionate about reunification history and social change
+- **Personality:** Intellectual, witty, passionate about reunification history and social change, academically precise
 - **Unlock:** Explore Leipzig's peaceful revolution history (Tier 2 Saxony)
-- **Topics:** Historical reflections, book recommendations, political discussions, Dresden reconstruction
-- **Recommendations:** Bach (music), Das Leben der Anderen (film), Der Vorleser (book)
+- **Topics:** Historical reflections, book recommendations, political discussions, Dresden reconstruction, philosophical debates
+- **Recommendations:** Bach (music), Das Leben der Anderen (film), Der Vorleser (book), Heidegger/Nietzsche (philosophy)
+- **Character Mini-Game Specialty:** Grammar precision + vocabulary sophistication
+  - Low relationship (Tier 1-2): Simple academic German, straightforward sentence structures, textbook vocabulary
+  - Mid relationship (Tier 3-4): Complex subordinate clauses, literary references (Goethe, Schiller), historical terminology
+  - High relationship (Tier 5-6): Philosophical vocabulary (Dasein, Weltanschauung, Zeitgeist), Nietzschean concepts, expects grammatical perfection
+  - Grading weights: Grammar 30%, Vocabulary 30% (highest standards for precision)
+  - Gets progressively MORE challenging as relationship deepens (inverse of most characters)
+- **Mini-Game Unlocked at Relationship 90+:** Philosophische Debatte (Philosophical Debate)
+  - Henrik poses philosophical questions in German (Existenz, Freiheit, Moral, Zeit)
+  - You must respond with grammatically perfect German using sophisticated vocabulary
+  - Claude grades on: grammar precision (case accuracy, subordinate clauses), vocabulary sophistication, argument coherence
+  - Henrik challenges your position: "Aber was ist mit...?" (But what about...?)
+  - Multi-turn debate structure (3-5 exchanges)
+  - Progressive topics: simple ethical questions → complex existential philosophy → Nietzschean concepts
+  - Teaches: Subordinate clause construction, philosophical vocabulary, argumentation language, subjunctive II, academic writing style
+  - Hardest mini-game in the entire system - Henrik holds you to native-speaker standards
 
 **Austria: Sophie** (Café Owner, 33)
 - **Personality:** Warm, sophisticated, loves classical music and coffee culture, romantic
 - **Unlock:** Learn Viennese coffee service at her café (Tier 2 Austria)
 - **Topics:** Opera reviews, café philosophy, Austrian vs. German differences, pastry recipes
 - **Recommendations:** Falco (music), Before Sunrise (film), Stefan Zweig (Die Welt von Gestern)
+- **Character Mini-Game Specialty:** Formal Politeness + Austrian Dialect
+  - Low relationship: Standard polite German (Sie/du distinctions, basic politeness)
+  - High relationship: Viennese courtly politeness (elaborate greetings, formal subjunctive forms), Austrian-specific vocabulary (Obers not Sahne, Paradeiser not Tomaten, Erdäpfel not Kartoffeln), expects mastery of Austrian vs. German lexical differences
+  - Unique adaptive bit: Uses more and more diminutives as relationship grows (-erl, -i endings: Busserl, Sackerl, Stamperl, Gulaschsupperl) - classic Austrian warmth
+  - Grading weights: Grammar 25% (formal subjunctive), Cultural Awareness 20% (Austrian vs. German), Vocabulary 20%
+- **Mini-Game Unlocked at Relationship 85+:** Wiener Kaffeehaus (Viennese Café Service)
+  - Sophie's café is packed - you must take orders from customers in formal Viennese German
+  - Customers order using Austrian vocabulary (Melange, Einspänner, Kapuziner, Sachertorte)
+  - You must respond with appropriate formality level (Sie forms, Konjunktiv II)
+  - Challenge: distinguish Austrian vs. German vocabulary in real-time
+  - Teaches: Austrian lexicon, formal politeness, subjunctive mood, café vocabulary, diminutives
+  - Sophie gives you feedback with increasing affection/diminutives as you succeed
+  - Success: unlock complete Austrian-German vocabulary comparison guide
 
 **Switzerland: Marco** (Chocolatier, 38)
 - **Personality:** Precise, perfectionistic, multilingual, dry humor, foodie
 - **Unlock:** Master Swiss German dialect while learning chocolate-making (Tier 2 Switzerland)
 - **Topics:** Chocolate experiments, Swiss German vs. Hochdeutsch, mountain adventures, multilingual life
 - **Recommendations:** Patent Ochsner (music), Die Herbstzeitlosen (film), Dürrenmatt/Max Frisch (books)
+- **Character Mini-Game Specialty:** Multilingual Code-Switching + Swiss Precision
+  - Low relationship: Standard Hochdeutsch, mentions Swiss German exists but uses it sparingly
+  - High relationship: Code-switches between Hochdeutsch and Swiss German mid-sentence, expects comprehension of both, throws in French/Italian loan words common in Swiss speech (Velo, Billett, Trottoir), uses Swiss-specific expressions
+  - Unique adaptive bit: Gets more perfectionistic about precision as tier increases (expects exact measurements, perfect grammar - typical Swiss exactness)
+  - Grading weights: Comprehension 25% (must understand code-switching), Grammar 20%, Cultural Awareness 20%
+- **Mini-Game Unlocked at Relationship 90+:** Schokoladenherstellung (Chocolate Making)
+  - Marco teaches Swiss chocolate-making with code-switched instructions (Hochdeutsch/Swiss German/French/Italian)
+  - "Jetzt müemmer d'Schokolade tempérer" (Now we must temper the chocolate - Swiss German + French loanword)
+  - You must follow precise measurements and respond to mixed-language instructions
+  - Challenge: comprehend code-switching while maintaining recipe precision
+  - Teaches: Swiss German vocabulary, multilingual comprehension, precise measurement vocabulary, food preparation terms
+  - Marco's perfectionism: "Nein, exakt 45 Grad! Nicht 44, nicht 46!" (Exactly 45 degrees!)
+  - Success: unlock Swiss German comprehension guide + chocolate vocabulary across three languages
 
 #### Adaptive Letter Frequency
 
@@ -582,22 +700,82 @@ schon gedacht, du hast uns vergessen!"
 to think you forgot about us!)
 ```
 
-#### Character Memory System
+#### Generic Character Relationship System
 
-Each character tracks:
-- First meeting date & your level then
-- Last visit date & your level then
-- Current visit & your level now
-- Topics you've discussed
-- Drills they've suggested
+**Every revisitable character is a mini-game** with their own specialty, progression, and difficulty curve. Instead of hardcoding Karl-specific tables, the system uses a generic `UserCharacterRelationship` model with flexible metadata.
+
+**Relationship Tracking:**
+- Relationship score (0-100) with tier-based behaviors
+- First meeting date & user level
+- Last visit date & user level
+- Visit count and conversation history
+- Character-specific metadata (JSON field for flexible storage)
+
+**Character Specialties & Mini-Games:**
+
+| Character | Specialty | Low Tier Behavior | High Tier Behavior | Unique Adaptive Bit | Grading Focus |
+|---|---|---|---|---|---|
+| **Karl** | Speed/Impatience | 5s timer, literal German | No timer, idioms (Berlin-specific), regional breads | Idiom evolution (literal → common → Berlin-specific) | Fluency 25%, Confidence 15% |
+| **Mila** | Creative/Artistic Expression | Simple art descriptions | Art critique vocabulary, metaphorical thinking | Mixes art jargon with Berlin street slang | Vocabulary 25%, Cultural Awareness 15% |
+| **Thomas** | Directional/Spatial | Simple directions (links, rechts) | Complex spatial (südwestlich, oberhalb Baumgrenze) | Talks faster in exciting/dangerous situations | Vocabulary 20%, Comprehension 25% |
+| **Lena** | Slang/Casual | Standard casual German | Heavy Hamburg slang, fast contractions | Gets more informal as relationship grows | Confidence 20%, Cultural Awareness 15% |
+| **Klaus** | Poetic/Sensory | Basic wine terms | Sophisticated sensory language, subjunctive | Philosophical wine metaphors about life | Vocabulary 30%, Grammar 20% (subjunctive) |
+| **Emma** | Technical + Fairy Tale | Basic fairy tale terms | Grimm archaic vocab + clockwork technical | Mixes fairy tale with technical ("verzaubertes Zahnrad") | Vocabulary 30%, Pronunciation 15% |
+| **Henrik** | Grammar + Vocabulary | Simple academic German | Philosophical vocab (Dasein, Zeitgeist), perfect grammar | Gets MORE challenging as relationship grows (inverse) | Grammar 30%, Vocabulary 30% |
+| **Sophie** | Formal + Austrian Dialect | Standard polite German | Viennese courtly politeness, Austrian vocabulary | More diminutives as relationship grows (-erl, -i) | Grammar 25%, Cultural Awareness 20% |
+| **Marco** | Multilingual Code-Switching | Standard Hochdeutsch | Hochdeutsch/Swiss German/French/Italian mixing | More perfectionistic about precision (Swiss exactness) | Comprehension 25%, Cultural Awareness 20% |
+
+**Adaptive Difficulty:**
+- Characters with `adaptive_vocabulary: true` scale word complexity by tier
+- Characters with `adaptive_grammar: true` scale sentence structure complexity
+- Most characters get EASIER to talk to as relationship grows (more patient, slower speech)
+- Henrik is INVERSE: gets MORE challenging at high tiers (academic rigor increases)
+
+**Metadata Examples:**
+```typescript
+// Karl's metadata
+{
+  bavarian_bread_discussed: true,
+  hamburg_bread_discussed: false,
+  rhine_bread_discussed: true,
+  blackforest_bread_discussed: false,
+  saxony_stollen_discussed: true,
+  master_test_passed: false
+}
+
+// Lena's metadata
+{
+  slang_tier: 3,  // 1-5 scale of slang complexity
+  vinyl_collection_discussed: ['Âme', 'Moderat', 'Paul Kalkbrenner'],
+  harbor_tour_completed: true,
+  fischmarkt_visited: true
+}
+
+// Henrik's metadata
+{
+  grammar_tier: 4,  // 1-5 scale of grammar complexity
+  vocabulary_tier: 4,  // 1-5 scale of vocab sophistication
+  philosophy_discussed: true,
+  ddr_stories_unlocked: true,
+  philosophers_referenced: ['Nietzsche', 'Heidegger'],
+  complex_subordinate_clauses_used: 15
+}
+```
+
+**Why Generic System Wins:**
+- Single table for all character relationships (scales to 50+ characters)
+- Flexible metadata allows character-specific tracking without schema changes
+- Each character can have unique tier names and thresholds
+- Easy to add new characters with new specialties
+- Reusable grading and progression logic
 
 #### Contextual Drill Suggestions
 
-Characters suggest drills relevant to their role:
-- **Baker** → Flashcard with bakery vocabulary
-- **Train Conductor** → Fill-blank with transport sentences
-- **Bartender** → Conversation drill (ordering practice)
-- **Professor** → Article-in-context drills focused on dative
+Characters suggest drills relevant to their specialty:
+- **Karl** → Speed drills (flashcards with 5s timer)
+- **Lena** → Slang recognition (match slang to meaning)
+- **Henrik** → Grammar precision (article-in-context, subordinate clauses)
+- **Emma** → Vocabulary building (fairy tale terms, technical vocabulary)
 
 ---
 
@@ -1115,8 +1293,45 @@ Deutscher. Gut gemacht."
 
 Relationship: 100 (max)
 Unlocked: "Karl's Apprentice" badge
-Reward: Karl teaches you to make bread (new mini-game unlocked)
+Reward: Karl's Bread-Making Mini-Game unlocked
 ```
+
+#### Karl's Bread-Making Mini-Game
+
+**Concept:** Interactive recipe-following game where Karl teaches you to make traditional German bread step-by-step in German.
+
+**Gameplay:**
+1. Karl announces which bread you're making today (Bauernbrot, Roggenbrot, Vollkornbrot)
+2. Step-by-step instructions appear in German with vocabulary highlighted
+3. Interactive actions: "Mische das Mehl mit Wasser" → [Mix] button
+4. Timed steps (Karl's impatience remains): "Schneller! Der Teig muss jetzt geknetet werden!"
+5. Karl coaches you with his usual gruff charm
+6. Success = virtual bread appears, added to your bread collection
+7. Each bread teaches different vocabulary set
+
+**Vocabulary Categories:**
+- **Ingredients**: Mehl (flour), Wasser (water), Hefe (yeast), Salz (salt), Sauerteig (sourdough starter)
+- **Actions**: mischen (mix), kneten (knead), gehen lassen (let rise), backen (bake), formen (shape)
+- **Equipment**: Schüssel (bowl), Ofen (oven), Backblech (baking sheet)
+- **Measurements**: Gramm, Liter, Esslöffel (tablespoon), Teelöffel (teaspoon)
+- **Descriptions**: klebrig (sticky), fest (firm), luftig (airy), knusprig (crispy)
+
+**Progression:**
+- Start with simple Brötchen (rolls)
+- Unlock progressively complex breads: Vollkornbrot → Bauernbrot → Roggenbrot → Stollen (Christmas special)
+- Each bread = 5-8 steps, takes 3-5 minutes to complete
+- Can replay any unlocked bread recipe to practice vocabulary
+
+**Rewards:**
+- Complete all breads → "Brotmeister" badge
+- Each bread completion → 100 XP + bread added to collection
+- Mastery of baking vocabulary (30-50 new words)
+
+**Karl's Commentary:**
+- Too slow: "Mensch! Der Teig wartet nicht!"
+- Correct step: "Ja, genau so."
+- Perfect bread: "Das ist ein echtes deutsches Brot. Respekt."
+- Mistake: "Nein, nein! Du musst zuerst kneten!"
 
 #### Relationship Score System (Fast Progression)
 
@@ -1158,7 +1373,7 @@ interface ConversationGrade {
 }
 ```
 
-**Karl's Weights (Pragmatic Baker):**
+**Karl's Weights (Pragmatic Baker / Speed & Impatience Specialist):**
 ```typescript
 weights: {
   comprehension: 0.20,     // Did you understand?
@@ -1170,6 +1385,11 @@ weights: {
   cultural_awareness: 0.05 // Knows you're learning
 }
 ```
+
+**Karl's Adaptive Difficulty (Idiom Evolution):**
+- **Low relationship (0-40)**: Literal German, straightforward language
+- **Mid relationship (41-70)**: Common idioms (Das ist mir Wurst, Ich verstehe nur Bahnhof, Das geht mir auf den Keks)
+- **High relationship (71-100)**: Berlin-specific idioms and sayings that require cultural knowledge (Dit is Berlin, Janz weit draußen, Icke, dette, kieke mal)
 
 **Example: Fluent but Grammatically Wrong**
 ```
