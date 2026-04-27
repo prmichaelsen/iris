@@ -147,17 +147,10 @@ export async function playBlob(blob: Blob): Promise<PlaybackHandle> {
   const arr = await blob.arrayBuffer()
   const buf = await c.decodeAudioData(arr.slice(0))
 
-  // AudioBufferSourceNode can't pause/resume, so we use a GainNode to
-  // mute/unmute and track position manually for the pause illusion.
-  // For true pause we'd need to stop + recreate at offset, which is
-  // more complex. Simpler: just use the gain trick for "pause" UX.
-  const src = c.createBufferSource()
-  const gain = c.createGain()
-  src.buffer = buf
-  src.connect(gain)
-  gain.connect(c.destination)
-
-  let _playing = true
+  let src: AudioBufferSourceNode | null = null
+  let startedAt = 0
+  let pausedAt = 0
+  let _playing = false
   let _stopped = false
   let resolvePromise: () => void
 
@@ -168,36 +161,48 @@ export async function playBlob(blob: Blob): Promise<PlaybackHandle> {
   const finish = () => {
     _playing = false
     _stopped = true
+    src = null
     if (activePlayback === handle) activePlayback = null
     resolvePromise()
   }
 
-  src.onended = finish
+  const startFrom = (offset: number) => {
+    src = c.createBufferSource()
+    src.buffer = buf
+    src.connect(c.destination)
+    src.onended = () => {
+      if (!_stopped) finish()
+    }
+    startedAt = c.currentTime - offset
+    _playing = true
+    src.start(0, offset)
+  }
 
   const handle: PlaybackHandle = {
     stop: () => {
       if (_stopped) return
-      try { src.stop() } catch {}
+      _stopped = true
+      try { src?.stop() } catch {}
       finish()
     },
     pause: () => {
       if (!_playing || _stopped) return
-      gain.gain.setValueAtTime(0, c.currentTime)
+      pausedAt = c.currentTime - startedAt
       _playing = false
+      try { src?.stop() } catch {}
+      src = null
     },
     resume: () => {
       if (_playing || _stopped) return
-      gain.gain.setValueAtTime(1, c.currentTime)
-      _playing = true
+      if (pausedAt >= buf.duration) { finish(); return }
+      startFrom(pausedAt)
     },
     get playing() { return _playing },
     done,
   }
 
-  // Stop any currently playing audio before starting new
   stopActivePlayback()
   activePlayback = handle
-
-  src.start(0)
+  startFrom(0)
   return handle
 }
