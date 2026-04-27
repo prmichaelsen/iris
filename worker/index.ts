@@ -1,9 +1,6 @@
 /// <reference types="@cloudflare/workers-types" />
 import Anthropic from '@anthropic-ai/sdk'
 import type {
-  FlashcardMatchingWidget,
-  FlashcardMatchingCard,
-  FlashcardMatchingCardResult,
   FlashcardMatchingAnswer,
   WidgetContentBlock,
   ContentBlock,
@@ -14,41 +11,17 @@ import {
   deleteSession,
   getCurrentUser,
   hashPassword,
-  newId,
   normalizeEmail,
-  nowSec,
   setSessionCookieHeader,
   validatePassword,
   verifyPassword,
 } from './auth'
-
-interface Env {
-  ANTHROPIC_API_KEY: string
-  ELEVENLABS_API_KEY: string
-  ELEVENLABS_VOICE_ID?: string
-  ASSETS: { fetch: (req: Request) => Promise<Response> }
-  DB: D1Database
-}
+import { getTools, executeToolCall, pickVocab, newId, nowSec, type Env, type PendingWidget } from './tools'
 
 const ELEVEN_API = 'https://api.elevenlabs.io/v1'
 const MODEL = 'claude-opus-4-7'
 const DEFAULT_VOICE_ID = 'XB0fDUnXU5powFXDhCwa'
 const MAX_TOOL_ITERATIONS = 10
-const WIDGET_TIMEOUT_MS = 300_000
-
-const FLASHCARD_TOOL: Anthropic.Tool = {
-  name: 'flashcard',
-  description: `Start a flashcard exercise. The server generates matching-mode cards from the user's vocabulary at their CEFR level. Use when the user wants to practice, drill, or review vocabulary. Say something encouraging before calling this tool.`,
-  input_schema: {
-    type: 'object' as const,
-    properties: {
-      mode: { type: 'string', enum: ['matching'], description: 'Quiz mode. Only matching is supported.' },
-      count: { type: 'integer', description: 'Number of cards (1-20). Default 10.' },
-      cefr_level: { type: 'string', enum: ['A1', 'A2', 'B1'], description: 'Target CEFR level. Omit to auto-detect.' },
-    },
-    required: ['mode'],
-  },
-}
 
 const BASE_PROMPT = `You are Iris, a warm and patient language tutor. The user's native language is English; you should treat English as their fallback for explanations.
 
@@ -69,14 +42,7 @@ function targetPrompt(nativeName: string, englishName: string): string {
 - If the transcript looks garbled, assume the user was attempting ${nativeName} with imperfect pronunciation and make your best guess from context.`
 }
 
-interface VocabCard {
-  lemma: string
-  display: string
-  article: string | null
-  cefr_level: string
-  sentence_de: string
-  sentence_en: string
-}
+import type { VocabCard } from './tools'
 
 function vocabBlock(cards: VocabCard[]): string {
   if (cards.length === 0) return ''
@@ -438,7 +404,7 @@ async function handleWebSocket(request: Request, env: Env): Promise<Response> {
         ? await pickVocab(env.DB, userId, targetLang.code, 5)
         : []
 
-      const tools: Anthropic.Tool[] = targetLang ? [FLASHCARD_TOOL] : []
+      const tools = getTools(targetLang)
       let fullAssistantText = ''
       const turnWidgetBlocks: WidgetContentBlock[] = []
 
