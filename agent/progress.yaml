@@ -55,7 +55,7 @@ milestones:
     title: Exercises Hub & UX
     status: planned
     file: null
-    tasks_total: 1
+    tasks_total: 3
     tasks_complete: 0
 
   - id: M8
@@ -193,6 +193,22 @@ tasks:
       status: not_started
       file: agent/tasks/milestone-7-exercises-hub-ux/task-1-word-hover-translation-popover.md
       estimated_hours: 4
+      started: null
+      actual_hours: null
+
+    - id: 2
+      title: Session Freshness Prompt Injector
+      status: not_started
+      file: agent/tasks/milestone-7-exercises-hub-ux/task-2-session-freshness-injector.md
+      estimated_hours: 0.75
+      started: null
+      actual_hours: null
+
+    - id: 3
+      title: Pinned Sentences and Concepts
+      status: not_started
+      file: agent/tasks/milestone-7-exercises-hub-ux/task-3-pinned-sentences-concepts.md
+      estimated_hours: 2.5
       started: null
       actual_hours: null
 

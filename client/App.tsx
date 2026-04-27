@@ -366,12 +366,12 @@ export default function App({ user, signOut }: AppProps) {
           data={displayItems}
           initialTopMostItemIndex={Math.max(displayItems.length - 1, 0)}
           atBottomStateChange={(b) => { atBottomRef.current = b; setAtBottom(b) }}
-          atBottomThreshold={48}
+          atBottomThreshold={200}
           followOutput={(isAtBottom) => (isAtBottom ? 'auto' : false)}
           totalListHeightChanged={() => {
             if (atBottomRef.current) {
               virtuosoRef.current?.scrollToIndex({
-                index: displayItems.length - 1,
+                index: 'LAST',
                 align: 'end',
                 behavior: 'auto',
               })

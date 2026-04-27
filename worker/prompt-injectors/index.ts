@@ -15,10 +15,12 @@ import { registerInjector } from './registry';
 import {
   CharacterPersonalityInjector,
   QuestConditionsInjector,
-  ConversationEndDetectorInjector
+  ConversationEndDetectorInjector,
+  StudyListInjector
 } from './injectors';
 
 // Register all default injectors
 registerInjector(new CharacterPersonalityInjector());
 registerInjector(new QuestConditionsInjector());
 registerInjector(new ConversationEndDetectorInjector());
+registerInjector(new StudyListInjector());

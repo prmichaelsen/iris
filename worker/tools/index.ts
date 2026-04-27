@@ -10,6 +10,7 @@ import { setContextTool, viewProgressTool, debugStateTool } from './gamification
 import { regionsTool } from './regions'
 import { questsTool } from './quests'
 import { sendPenPalLetterTool, checkPenPalAttentionTool } from './pen-pals'
+import { studyListTool } from './study-list'
 
 const TOOL_REGISTRY: ToolRegistration[] = [
   flashcardMatchingTool,
@@ -23,6 +24,7 @@ const TOOL_REGISTRY: ToolRegistration[] = [
   questsTool,
   sendPenPalLetterTool,
   checkPenPalAttentionTool,
+  studyListTool,
 ]
 
 export function getTools(targetLang: { code: string } | null): Anthropic.Tool[] {

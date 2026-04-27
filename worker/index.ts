@@ -30,6 +30,7 @@ import {
   type ConversationState,
 } from './conversation-state'
 import { updateSessionCharacterState } from './session-state'
+import { buildSystemPrompt as injectorsBuildSystemPrompt } from './prompt-injectors'
 
 const ELEVEN_API = 'https://api.elevenlabs.io/v1'
 const MODEL = 'claude-opus-4-7'
@@ -52,7 +53,12 @@ Gamification tools (use proactively):
 - \`quests\` tool with action="activate" starts a quest (switches you into that character's voice and personality).
 - When the user says something like "Hast du eine Quest für mich mit Karl?" or "Can I talk to Karl?", call \`quests\` action=list region_id=berlin to find Karl's quests, then describe them.
 - Karl der Bäcker (Berlin baker) offers the "Erste Bestellung" quest — a time-pressured ordering challenge.
-- Mila (Berlin street artist) can be unlocked by completing Tier 2 Berlin quests.`
+- Mila (Berlin street artist) can be unlocked by completing Tier 2 Berlin quests.
+
+Study list tool (use proactively):
+- When the user says "add X to my study list", "I keep forgetting Y", "let's practice Z", or similar, call \`study_list\` action="add" with the word AND its English gloss.
+- When the user asks "what's on my study list" or "what am I studying", call \`study_list\` action="list".
+- A Study List section may appear later in this system prompt with the user's active words — when it does, follow its rules exactly (inline gloss format is mandatory for study words).`
 
 const NO_TARGET_PROMPT = `The user has not picked a target language yet. Greet them in English and ask which language they would like to practice. Until they pick one, keep the conversation in English.`
 
@@ -95,6 +101,41 @@ function buildSystemPrompt(
     ? `${BASE_PROMPT}\n\n${targetPrompt(targetLang.name, targetLang.english)}`
     : `${BASE_PROMPT}\n\n${NO_TARGET_PROMPT}`
   return base + vocabBlock(vocab)
+}
+
+/**
+ * Async variant that runs the prompt injector registry to append
+ * dynamic sections (study list, quest conditions, etc.). Falls back
+ * to the sync buildSystemPrompt if no injectors match.
+ */
+async function buildSystemPromptAsync(
+  targetLang: { code: string; name: string; english: string } | null,
+  vocab: VocabCard[],
+  character: Character | undefined,
+  db: D1Database,
+  userId: string,
+  activeCharacterId: string,
+  activeQuestId: string | undefined,
+  currentRegion: string,
+): Promise<string> {
+  const basePrompt = buildSystemPrompt(targetLang, vocab, character)
+
+  try {
+    const { prompt: injectedSections } = await injectorsBuildSystemPrompt({
+      context: {
+        userId,
+        db,
+        activeCharacterId,
+        activeQuestId,
+        currentRegion,
+      },
+    })
+    if (injectedSections.trim().length === 0) return basePrompt
+    return `${basePrompt}\n\n${injectedSections}`
+  } catch (err) {
+    console.error('Prompt injector failure (falling back to base):', err)
+    return basePrompt
+  }
 }
 
 async function pickVocab(
@@ -448,7 +489,7 @@ async function handleWebSocket(request: Request, env: Env): Promise<Response> {
             const stream = anthropic.messages.stream({
               model: MODEL,
               max_tokens: 512,
-              system: buildSystemPrompt(targetLang, vocab, activeCharacter),
+              system: await buildSystemPromptAsync(targetLang, vocab, activeCharacter, env.DB, userId, activeCharacterId, activeQuest || undefined, currentRegion),
               messages: sanitizeToolMessages(history),
               ...(tools.length > 0 ? { tools } : {}),
             })
@@ -495,7 +536,7 @@ async function handleWebSocket(request: Request, env: Env): Promise<Response> {
             const stream = anthropic.messages.stream({
               model: MODEL,
               max_tokens: 1024,
-              system: buildSystemPrompt(targetLang, vocab, activeCharacter),
+              system: await buildSystemPromptAsync(targetLang, vocab, activeCharacter, env.DB, userId, activeCharacterId, activeQuest || undefined, currentRegion),
               messages: sanitizeToolMessages(history),
               ...(tools.length > 0 ? { tools } : {}),
             })
@@ -610,7 +651,7 @@ async function handleWebSocket(request: Request, env: Env): Promise<Response> {
         const stream = anthropic.messages.stream({
           model: MODEL,
           max_tokens: 1024,
-          system: buildSystemPrompt(targetLang, vocab, activeCharacter),
+          system: await buildSystemPromptAsync(targetLang, vocab, activeCharacter, env.DB, userId, activeCharacterId, activeQuest || undefined, currentRegion),
           messages: sanitizeToolMessages(history),
           ...(tools.length > 0 ? { tools } : {}),
         })
