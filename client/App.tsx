@@ -6,6 +6,7 @@ import { FlashcardFreeformActive, FlashcardFreeformResult } from './widgets/Flas
 import { GenderPickActive, GenderPickResult } from './widgets/GenderPick'
 import { DefinitionActive, DefinitionResult } from './widgets/Definition'
 import { FillBlankActive, FillBlankResult } from './widgets/FillBlank'
+import TimerCountdown from './TimerCountdown'
 import type { AuthUser } from './AuthGate'
 import LanguagePicker from './LanguagePicker'
 import { findLanguage } from './languages'
@@ -57,6 +58,13 @@ export default function App({ user, signOut }: AppProps) {
   const [activeWidget, setActiveWidget] = useState<Widget | null>(null)
   const [playingTurnIndex, setPlayingTurnIndex] = useState<number | null>(null)
   const playbackRef = useRef<PlaybackHandle | null>(null)
+
+  // Timer state for Karl's time pressure
+  const [timerEnabled, setTimerEnabled] = useState(false)
+  const [timerDuration, setTimerDuration] = useState(5000)
+  const [timerActive, setTimerActive] = useState(false)
+  const [strikes, setStrikes] = useState(0)
+  const [maxStrikes, setMaxStrikes] = useState(3)
 
   const wsRef = useRef<WebSocket | null>(null)
   const recorderRef = useRef(new Recorder())
@@ -159,6 +167,20 @@ export default function App({ user, signOut }: AppProps) {
           })
         } else if (msg.type === 'widget_cancel') {
           setActiveWidget(null)
+        } else if (msg.type === 'timer_config') {
+          setTimerEnabled(msg.enabled)
+          setTimerDuration(msg.duration_ms)
+        } else if (msg.type === 'timer_start') {
+          setTimerActive(true)
+        } else if (msg.type === 'timer_stop') {
+          setTimerActive(false)
+        } else if (msg.type === 'strike') {
+          setStrikes(msg.strikes)
+          setMaxStrikes(msg.max_strikes)
+        } else if (msg.type === 'quest_failed') {
+          setTimerActive(false)
+          // Quest failed — show message to user
+          console.log('[client] Quest failed:', msg.reason)
         } else if (msg.type === 'error') {
           setError(msg.message)
           setStatus('idle')
@@ -280,7 +302,15 @@ export default function App({ user, signOut }: AppProps) {
     setHistory([])
     partialRef.current = ''
     setPartial('')
+    setTimerActive(false)
+    setStrikes(0)
     wsRef.current?.send(JSON.stringify({ type: 'reset' }))
+  }
+
+  const handleTimeout = () => {
+    // User failed to respond in time
+    setTimerActive(false)
+    wsRef.current?.send(JSON.stringify({ type: 'timeout' }))
   }
 
   const setLanguage = (next: string) => {
@@ -527,6 +557,21 @@ export default function App({ user, signOut }: AppProps) {
       )}
 
       {error && <div className="error">{error}</div>}
+
+      {timerEnabled && (
+        <div className="timer-container">
+          <TimerCountdown
+            duration={timerDuration}
+            active={timerActive}
+            onTimeout={handleTimeout}
+          />
+          {strikes > 0 && (
+            <div className="strike-indicator">
+              Strikes: {strikes}/{maxStrikes}
+            </div>
+          )}
+        </div>
+      )}
 
       <div className="lang-bar">
         <span className="lang-bar-label">learning</span>
