@@ -60,14 +60,14 @@ async function executeFillBlank(
   const cefrLevel = (input.cefr_level as string) || undefined
   const focus = (input.focus as string) || undefined
 
-  // Build focus filter for part_of_speech
+  // Build focus filter for pos
   let partOfSpeechFilter = ''
   if (focus === 'verbs') {
-    partOfSpeechFilter = "AND v.part_of_speech = 'verb'"
+    partOfSpeechFilter = "AND v.pos = 'verb'"
   } else if (focus === 'articles') {
-    partOfSpeechFilter = "AND v.part_of_speech = 'article'"
+    partOfSpeechFilter = "AND v.pos = 'article'"
   } else if (focus === 'prepositions') {
-    partOfSpeechFilter = "AND v.part_of_speech = 'preposition'"
+    partOfSpeechFilter = "AND v.pos = 'preposition'"
   }
 
   const cefrFilter = cefrLevel ? `AND v.cefr_level = '${cefrLevel}'` : ''
@@ -75,7 +75,7 @@ async function executeFillBlank(
   // Query vocab items that have example sentences
   const result = await env.DB
     .prepare(
-      `SELECT v.id, v.lemma, v.display, v.article, v.cefr_level, v.part_of_speech,
+      `SELECT v.id, v.lemma, v.display, v.article, v.cefr_level, v.pos,
               e.id as example_id, e.sentence_de
        FROM vocab_items v
        INNER JOIN vocab_examples e ON e.vocab_item_id = v.id
@@ -95,7 +95,7 @@ async function executeFillBlank(
       display: string
       article: string | null
       cefr_level: string
-      part_of_speech: string | null
+      pos: string | null
       example_id: number
       sentence_de: string
     }>()

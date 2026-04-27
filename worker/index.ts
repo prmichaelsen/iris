@@ -17,6 +17,7 @@ import {
   verifyPassword,
 } from './auth'
 import { getTools, executeToolCall, pickVocab, newId, nowSec, type Env, type PendingWidget } from './tools'
+import { sanitizeToolMessages } from './sanitize-tool-messages'
 
 const ELEVEN_API = 'https://api.elevenlabs.io/v1'
 const MODEL = 'claude-opus-4-7'
@@ -417,7 +418,7 @@ async function handleWebSocket(request: Request, env: Env): Promise<Response> {
           model: MODEL,
           max_tokens: 1024,
           system: buildSystemPrompt(targetLang, vocab),
-          messages: history,
+          messages: sanitizeToolMessages(history),
           ...(tools.length > 0 ? { tools } : {}),
         })
 
