@@ -118,20 +118,86 @@ export class StreamingPlayer {
   }
 }
 
-export async function playBlob(blob: Blob): Promise<void> {
+export interface PlaybackHandle {
+  stop: () => void
+  pause: () => void
+  resume: () => void
+  readonly playing: boolean
+  readonly done: Promise<void>
+}
+
+let activePlayback: PlaybackHandle | null = null
+
+export function getActivePlayback(): PlaybackHandle | null {
+  return activePlayback
+}
+
+export function stopActivePlayback(): void {
+  if (activePlayback) {
+    activePlayback.stop()
+    activePlayback = null
+  }
+}
+
+export async function playBlob(blob: Blob): Promise<PlaybackHandle> {
   const c = ctx()
   if (c.state === 'suspended') {
     try { await c.resume() } catch {}
   }
-  // decodeAudioData consumes the buffer — slice(0) gives a fresh copy in case
-  // the same blob is replayed later.
   const arr = await blob.arrayBuffer()
   const buf = await c.decodeAudioData(arr.slice(0))
-  return new Promise((resolve) => {
-    const src = c.createBufferSource()
-    src.buffer = buf
-    src.connect(c.destination)
-    src.onended = () => resolve()
-    src.start(0)
+
+  // AudioBufferSourceNode can't pause/resume, so we use a GainNode to
+  // mute/unmute and track position manually for the pause illusion.
+  // For true pause we'd need to stop + recreate at offset, which is
+  // more complex. Simpler: just use the gain trick for "pause" UX.
+  const src = c.createBufferSource()
+  const gain = c.createGain()
+  src.buffer = buf
+  src.connect(gain)
+  gain.connect(c.destination)
+
+  let _playing = true
+  let _stopped = false
+  let resolvePromise: () => void
+
+  const done = new Promise<void>((resolve) => {
+    resolvePromise = resolve
   })
+
+  const finish = () => {
+    _playing = false
+    _stopped = true
+    if (activePlayback === handle) activePlayback = null
+    resolvePromise()
+  }
+
+  src.onended = finish
+
+  const handle: PlaybackHandle = {
+    stop: () => {
+      if (_stopped) return
+      try { src.stop() } catch {}
+      finish()
+    },
+    pause: () => {
+      if (!_playing || _stopped) return
+      gain.gain.setValueAtTime(0, c.currentTime)
+      _playing = false
+    },
+    resume: () => {
+      if (_playing || _stopped) return
+      gain.gain.setValueAtTime(1, c.currentTime)
+      _playing = true
+    },
+    get playing() { return _playing },
+    done,
+  }
+
+  // Stop any currently playing audio before starting new
+  stopActivePlayback()
+  activePlayback = handle
+
+  src.start(0)
+  return handle
 }

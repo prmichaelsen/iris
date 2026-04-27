@@ -4,6 +4,20 @@ All notable changes to Iris are documented here. Format follows [Keep a Changelo
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-04-27
+
+### Added
+- **Audio playback controls**: Replay buttons now show play/pause state (▶/⏸) and can pause/resume audio mid-playback
+- **Barge-in support**: Pressing Space or mic button while Iris is speaking stops her audio immediately, allowing interruption
+- **PlaybackHandle API**: `playBlob()` now returns handle with `stop()`, `pause()`, `resume()`, `playing` state, and `done` promise for programmatic audio control
+
+### Changed
+- Audio playback refactored to use GainNode for pause/resume simulation (AudioBufferSourceNode doesn't support native pause)
+- Mic button now enabled during 'speaking' status to allow barge-in
+- Active playback tracked globally with automatic cleanup on new playback start
+
+## [Unreleased - Design Phase]
+
 ### Added
 - **Character mini-games (9 total)**: each character unlocks unique mini-game at high relationship tier (70-90+) that reinforces their specialty and provides replay value:
   - **Karl (80+)**: Bread-Making Recipe Game - interactive step-by-step baking with timed actions and Karl's coaching

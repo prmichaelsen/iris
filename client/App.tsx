@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Virtuoso, type VirtuosoHandle } from 'react-virtuoso'
-import { Recorder, StreamingPlayer, playBlob, unlockAudioPlayback } from './audio'
+import { Recorder, StreamingPlayer, playBlob, unlockAudioPlayback, stopActivePlayback, type PlaybackHandle } from './audio'
 import { FlashcardActive, FlashcardResult } from './FlashcardWidget'
 import type { AuthUser } from './AuthGate'
 import LanguagePicker from './LanguagePicker'
@@ -39,6 +39,8 @@ export default function App({ user, signOut }: AppProps) {
   const [error, setError] = useState<string | null>(null)
   const [lang, setLang] = useState<string>(user.targetLang?.code ?? 'auto')
   const [activeWidget, setActiveWidget] = useState<FlashcardMatchingWidget | null>(null)
+  const [playingTurnIndex, setPlayingTurnIndex] = useState<number | null>(null)
+  const playbackRef = useRef<PlaybackHandle | null>(null)
 
   const wsRef = useRef<WebSocket | null>(null)
   const recorderRef = useRef(new Recorder())
@@ -104,7 +106,9 @@ export default function App({ user, signOut }: AppProps) {
           }
           if (audio) {
             try {
-              await playBlob(audio)
+              setStatus('speaking')
+              const handle = await playBlob(audio)
+              await handle.done
             } catch {
               // iOS may reject autoplay; ▶ button still works
             }
@@ -206,6 +210,12 @@ export default function App({ user, signOut }: AppProps) {
     setError(null)
     // Must be SYNC, before any await — iOS forgets the gesture otherwise
     unlockAudioPlayback()
+
+    // Barge-in: if Iris is speaking, stop her audio but keep the text
+    if (status === 'speaking') {
+      stopActivePlayback()
+    }
+
     try {
       await recorderRef.current.start()
       setStatus('listening')
@@ -275,7 +285,7 @@ export default function App({ user, signOut }: AppProps) {
 
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
-      if (e.code === 'Space' && !e.repeat && status === 'idle') {
+      if (e.code === 'Space' && !e.repeat && (status === 'idle' || status === 'speaking')) {
         e.preventDefault()
         startTalk()
       }
@@ -336,11 +346,34 @@ export default function App({ user, signOut }: AppProps) {
                   {turn.audio && (
                     <button
                       className="replay"
-                      onClick={() => playBlob(turn.audio!).catch(() => {})}
-                      title="Play again"
-                      aria-label="Replay audio"
+                      onClick={async () => {
+                        const turnIdx = _index
+                        if (playingTurnIndex === turnIdx && playbackRef.current) {
+                          if (playbackRef.current.playing) {
+                            playbackRef.current.pause()
+                            setPlayingTurnIndex(null)
+                          } else {
+                            playbackRef.current.resume()
+                            setPlayingTurnIndex(turnIdx)
+                          }
+                          return
+                        }
+                        try {
+                          const handle = await playBlob(turn.audio!)
+                          playbackRef.current = handle
+                          setPlayingTurnIndex(turnIdx)
+                          handle.done.then(() => {
+                            if (playbackRef.current === handle) {
+                              playbackRef.current = null
+                              setPlayingTurnIndex(null)
+                            }
+                          })
+                        } catch {}
+                      }}
+                      title={playingTurnIndex === _index ? 'Pause' : 'Play'}
+                      aria-label={playingTurnIndex === _index ? 'Pause audio' : 'Replay audio'}
                     >
-                      ▶
+                      {playingTurnIndex === _index ? '⏸' : '▶'}
                     </button>
                   )}
                 </div>
@@ -392,7 +425,7 @@ export default function App({ user, signOut }: AppProps) {
           onMouseLeave={() => status === 'listening' && stopTalk()}
           onTouchStart={startTalk}
           onTouchEnd={stopTalk}
-          disabled={status !== 'idle' && status !== 'listening'}
+          disabled={status !== 'idle' && status !== 'listening' && status !== 'speaking'}
         >
           {status === 'connecting' && 'connecting…'}
           {status === 'reconnecting' && 'reconnecting…'}
