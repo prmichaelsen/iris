@@ -1,12 +1,31 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Virtuoso, type VirtuosoHandle } from 'react-virtuoso'
 import { Recorder, StreamingPlayer, playBlob, unlockAudioPlayback } from './audio'
+import { FlashcardActive, FlashcardResult } from './FlashcardWidget'
 import type { AuthUser } from './AuthGate'
 import LanguagePicker from './LanguagePicker'
 import { findLanguage } from './languages'
+import type {
+  FlashcardMatchingWidget,
+  FlashcardMatchingAnswer,
+  FlashcardMatchingCardResult,
+  WidgetContentBlock,
+  ContentBlock,
+} from '../shared/types/widgets'
 
 type Status = 'connecting' | 'reconnecting' | 'idle' | 'listening' | 'thinking' | 'speaking' | 'error'
-type Turn = { role: 'user' | 'assistant'; text: string; audio?: Blob }
+
+interface WidgetTurn {
+  widget: FlashcardMatchingWidget
+  result?: { score: number; total: number; cards: FlashcardMatchingCardResult[] }
+}
+
+type Turn = {
+  role: 'user' | 'assistant'
+  text: string
+  audio?: Blob
+  widgets?: WidgetTurn[]
+}
 
 interface AppProps {
   user: AuthUser
@@ -19,6 +38,7 @@ export default function App({ user, signOut }: AppProps) {
   const [partial, setPartial] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [lang, setLang] = useState<string>(user.targetLang?.code ?? 'auto')
+  const [activeWidget, setActiveWidget] = useState<FlashcardMatchingWidget | null>(null)
 
   const wsRef = useRef<WebSocket | null>(null)
   const recorderRef = useRef(new Recorder())
@@ -48,12 +68,24 @@ export default function App({ user, signOut }: AppProps) {
         const msg = JSON.parse(e.data)
         if (msg.type === 'history') {
           setHistory(
-            (msg.turns as { role: 'user' | 'assistant'; text: string }[]).map((t) => ({
-              role: t.role,
-              text: t.text,
-            })),
+            (msg.turns as { role: 'user' | 'assistant'; text: string; content_blocks?: ContentBlock[] | null }[]).map((t) => {
+              const turn: Turn = { role: t.role, text: t.text }
+              if (t.content_blocks) {
+                const widgetBlocks = t.content_blocks.filter(
+                  (b): b is WidgetContentBlock => b.type === 'widget',
+                )
+                if (widgetBlocks.length > 0) {
+                  turn.widgets = widgetBlocks.map((wb) => ({
+                    widget: wb.payload as FlashcardMatchingWidget,
+                    result: wb.result
+                      ? { score: wb.result.score, total: wb.result.total, cards: (wb.result as any).cards }
+                      : undefined,
+                  }))
+                }
+              }
+              return turn
+            }),
           )
-          // History is the user's own — pin to bottom unconditionally.
           scrollToBottom()
         } else if (msg.type === 'transcript') {
           setHistory((h) => [...h, { role: 'user', text: msg.text }])
@@ -78,6 +110,37 @@ export default function App({ user, signOut }: AppProps) {
             }
           }
           setStatus('idle')
+        } else if (msg.type === 'widget') {
+          const w = msg.widget as FlashcardMatchingWidget
+          setActiveWidget(w)
+          // Attach to current or create new assistant turn with the widget
+          setHistory((h) => {
+            const last = h[h.length - 1]
+            if (last?.role === 'assistant') {
+              return [...h.slice(0, -1), { ...last, widgets: [...(last.widgets || []), { widget: w }] }]
+            }
+            return [...h, { role: 'assistant', text: '', widgets: [{ widget: w }] }]
+          })
+        } else if (msg.type === 'widget_result') {
+          const result = msg as { widget_id: string; score: number; total: number; cards: FlashcardMatchingCardResult[] }
+          setActiveWidget(null)
+          // Attach widget result to the most recent assistant turn
+          setHistory((h) => {
+            const last = h[h.length - 1]
+            if (last?.role === 'assistant') {
+              const widgets = last.widgets || []
+              // Find the widget turn matching this result
+              const updated = widgets.map((w) =>
+                w.widget.widget_id === result.widget_id
+                  ? { ...w, result: { score: result.score, total: result.total, cards: result.cards } }
+                  : w,
+              )
+              return [...h.slice(0, -1), { ...last, widgets: updated }]
+            }
+            return h
+          })
+        } else if (msg.type === 'widget_cancel') {
+          setActiveWidget(null)
         } else if (msg.type === 'error') {
           setError(msg.message)
           setStatus('idle')
@@ -281,7 +344,33 @@ export default function App({ user, signOut }: AppProps) {
                     </button>
                   )}
                 </div>
-                <div className="text">{turn.text}</div>
+                {turn.text && <div className="text">{turn.text}</div>}
+                {turn.widgets?.map((wt) =>
+                  wt.result ? (
+                    <FlashcardResult
+                      key={wt.widget.widget_id}
+                      widget={wt.widget}
+                      cards={wt.result.cards}
+                      score={wt.result.score}
+                      total={wt.result.total}
+                      onRetake={() => {
+                        wsRef.current?.send(JSON.stringify({ type: 'widget_retake', widget_id: wt.widget.widget_id }))
+                      }}
+                    />
+                  ) : activeWidget?.widget_id === wt.widget.widget_id ? (
+                    <FlashcardActive
+                      key={wt.widget.widget_id}
+                      widget={wt.widget}
+                      onSubmit={(answers) => {
+                        wsRef.current?.send(JSON.stringify({
+                          type: 'widget_response',
+                          widget_id: wt.widget.widget_id,
+                          answers,
+                        }))
+                      }}
+                    />
+                  ) : null,
+                )}
               </div>
             )
           }}

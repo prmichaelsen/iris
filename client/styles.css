@@ -471,3 +471,157 @@ footer {
   0%, 100% { box-shadow: 0 0 0 0 rgba(185, 74, 58, 0.5); }
   50% { box-shadow: 0 0 0 12px rgba(185, 74, 58, 0); }
 }
+
+/* ---- Flashcard Widget ---- */
+
+.fc-widget {
+  background: var(--assistant-bg);
+  border: 1px solid var(--border);
+  border-radius: 0.75rem;
+  padding: 1.25rem;
+  margin-bottom: 0.75rem;
+  max-width: 85%;
+}
+
+.fc-progress {
+  font-size: 0.75rem;
+  color: var(--muted);
+  text-align: center;
+  margin-bottom: 0.5rem;
+  letter-spacing: 0.1em;
+}
+
+.fc-word {
+  font-size: 1.5rem;
+  font-style: italic;
+  text-align: center;
+  padding: 1rem 0;
+  line-height: 1.3;
+}
+
+.fc-options {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.fc-option {
+  padding: 0.75rem 1rem;
+  font-size: 1rem;
+  font-family: inherit;
+  text-align: left;
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  background: var(--bg);
+  color: var(--fg);
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.fc-option:hover:not(:disabled) {
+  border-color: var(--accent);
+  background: var(--user-bg);
+}
+
+.fc-option:disabled {
+  cursor: default;
+  opacity: 0.7;
+}
+
+.fc-option-selected {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: white;
+}
+
+/* ---- Flashcard Result ---- */
+
+.fc-result {
+  text-align: center;
+}
+
+.fc-score {
+  font-size: 2rem;
+  font-style: italic;
+  margin-bottom: 0.25rem;
+}
+
+.fc-score-label {
+  display: block;
+  font-size: 0.8rem;
+  color: var(--muted);
+  font-style: normal;
+  text-transform: lowercase;
+  letter-spacing: 0.05em;
+}
+
+.fc-result-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  margin: 1rem 0;
+  text-align: left;
+}
+
+.fc-result-card {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  padding: 0.35rem 0.5rem;
+  border-radius: 0.35rem;
+  font-size: 0.9rem;
+}
+
+.fc-correct {
+  background: rgba(34, 139, 34, 0.08);
+}
+
+.fc-incorrect {
+  background: rgba(185, 74, 58, 0.08);
+}
+
+.fc-result-mark {
+  font-size: 0.8rem;
+  flex-shrink: 0;
+  width: 1rem;
+}
+
+.fc-correct .fc-result-mark {
+  color: forestgreen;
+}
+
+.fc-incorrect .fc-result-mark {
+  color: var(--accent);
+}
+
+.fc-result-word {
+  font-style: italic;
+  flex-shrink: 0;
+  min-width: 0;
+}
+
+.fc-result-answer {
+  color: var(--muted);
+  font-size: 0.8rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.fc-retake {
+  padding: 0.5rem 1.25rem;
+  font-family: inherit;
+  font-size: 0.85rem;
+  font-style: italic;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--fg);
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.fc-retake:hover {
+  border-color: var(--accent);
+  background: var(--user-bg);
+}
