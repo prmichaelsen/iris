@@ -1,5 +1,13 @@
 /// <reference types="@cloudflare/workers-types" />
 import Anthropic from '@anthropic-ai/sdk'
+import type {
+  FlashcardMatchingWidget,
+  FlashcardMatchingCard,
+  FlashcardMatchingCardResult,
+  FlashcardMatchingAnswer,
+  WidgetContentBlock,
+  ContentBlock,
+} from '../shared/types/widgets'
 import {
   clearSessionCookieHeader,
   createSession,
@@ -25,6 +33,22 @@ interface Env {
 const ELEVEN_API = 'https://api.elevenlabs.io/v1'
 const MODEL = 'claude-opus-4-7'
 const DEFAULT_VOICE_ID = 'XB0fDUnXU5powFXDhCwa'
+const MAX_TOOL_ITERATIONS = 10
+const WIDGET_TIMEOUT_MS = 300_000
+
+const FLASHCARD_TOOL: Anthropic.Tool = {
+  name: 'flashcard',
+  description: `Start a flashcard exercise. The server generates matching-mode cards from the user's vocabulary at their CEFR level. Use when the user wants to practice, drill, or review vocabulary. Say something encouraging before calling this tool.`,
+  input_schema: {
+    type: 'object' as const,
+    properties: {
+      mode: { type: 'string', enum: ['matching'], description: 'Quiz mode. Only matching is supported.' },
+      count: { type: 'integer', description: 'Number of cards (1-20). Default 10.' },
+      cefr_level: { type: 'string', enum: ['A1', 'A2', 'B1'], description: 'Target CEFR level. Omit to auto-detect.' },
+    },
+    required: ['mode'],
+  },
+}
 
 const BASE_PROMPT = `You are Iris, a warm and patient language tutor. The user's native language is English; you should treat English as their fallback for explanations.
 
@@ -78,9 +102,9 @@ async function pickVocab(
   userId: string,
   langCode: string,
   count = 5,
+  cefrLevel?: string,
 ): Promise<VocabCard[]> {
-  // Prefer words the user hasn't seen, or words that are due for review.
-  // Falls back to random unseen words at the lowest available CEFR level.
+  const cefrFilter = cefrLevel ? `AND v.cefr_level = '${cefrLevel}'` : ''
   const result = await db
     .prepare(
       `SELECT v.lemma, v.display, v.article, v.cefr_level,
@@ -88,11 +112,11 @@ async function pickVocab(
        FROM vocab_items v
        LEFT JOIN vocab_examples e ON e.vocab_item_id = v.id
        LEFT JOIN user_vocab_progress p ON p.vocab_item_id = v.id AND p.user_id = ?
-       WHERE v.language = ?
+       WHERE v.language = ? ${cefrFilter}
        ORDER BY
-         CASE WHEN p.due_at IS NULL THEN 0 ELSE 1 END,  -- unseen first
-         CASE WHEN p.due_at IS NOT NULL AND p.due_at <= ? THEN 0 ELSE 1 END,  -- due items next
-         v.cefr_level ASC,  -- lower CEFR first
+         CASE WHEN p.due_at IS NULL THEN 0 ELSE 1 END,
+         CASE WHEN p.due_at IS NOT NULL AND p.due_at <= ? THEN 0 ELSE 1 END,
+         v.cefr_level ASC,
          RANDOM()
        LIMIT ?`,
     )
@@ -293,6 +317,17 @@ async function handleWebSocket(request: Request, env: Env): Promise<Response> {
       : null
   let nextLanguage: string | undefined = targetLang?.code
 
+  // Pending widget state — at most one widget active per connection.
+  // When a widget is pending, the promise resolves with the user's answers
+  // or rejects on timeout/cancel.
+  const pendingWidget: {
+    widgetId: string | null
+    resolve: ((answers: FlashcardMatchingAnswer[]) => void) | null
+    reject: ((reason: string) => void) | null
+    timer: ReturnType<typeof setTimeout> | null
+    correctMap: Map<string, { correct_index: number; correct_answer: string; word: string }>
+  } = { widgetId: null, resolve: null, reject: null, timer: null, correctMap: new Map() }
+
   // Find or create the user's active conversation, then load history from D1.
   const conversationId = await getOrCreateActiveConversation(env.DB, userId)
   const history: Anthropic.MessageParam[] = await loadHistory(env.DB, conversationId)
@@ -331,7 +366,23 @@ async function handleWebSocket(request: Request, env: Env): Promise<Response> {
             .prepare('DELETE FROM messages WHERE conversation_id = ?')
             .bind(conversationId)
             .run()
+        } else if (msg.type === 'widget_response' && pendingWidget.widgetId === msg.widget_id && pendingWidget.resolve) {
+          if (pendingWidget.timer) clearTimeout(pendingWidget.timer)
+          pendingWidget.resolve(msg.answers ?? [])
+          pendingWidget.resolve = null
+          pendingWidget.reject = null
+          pendingWidget.timer = null
         } else if (msg.type === 'language') {
+          // Cancel pending widget on language change
+          if (pendingWidget.widgetId && pendingWidget.reject) {
+            send({ type: 'widget_cancel', widget_id: pendingWidget.widgetId, reason: 'Language changed' })
+            if (pendingWidget.timer) clearTimeout(pendingWidget.timer)
+            pendingWidget.reject('Language changed')
+            pendingWidget.widgetId = null
+            pendingWidget.resolve = null
+            pendingWidget.reject = null
+            pendingWidget.timer = null
+          }
           if (msg.code === 'auto' || !msg.code) {
             nextLanguage = undefined
             targetLang = null
@@ -378,37 +429,86 @@ async function handleWebSocket(request: Request, env: Env): Promise<Response> {
       await persistMessage(env.DB, conversationId, 'user', transcript)
 
       // Pick vocabulary cards for this turn — injected into the system prompt
-      // so Iris weaves them into conversation naturally.
       const vocab = targetLang
         ? await pickVocab(env.DB, userId, targetLang.code, 5)
         : []
 
-      let assistantText = ''
-      const stream = anthropic.messages.stream({
-        model: MODEL,
-        max_tokens: 512,
-        system: buildSystemPrompt(targetLang, vocab),
-        messages: history,
-      })
+      const tools: Anthropic.Tool[] = targetLang ? [FLASHCARD_TOOL] : []
+      let fullAssistantText = ''
 
-      stream.on('text', (delta) => {
-        assistantText += delta
-        send({ type: 'response_text', delta })
-      })
+      // Tool-use loop: stream Claude, execute any tool calls, feed results back
+      for (let iteration = 0; iteration < MAX_TOOL_ITERATIONS; iteration++) {
+        let iterationText = ''
+        const stream = anthropic.messages.stream({
+          model: MODEL,
+          max_tokens: 1024,
+          system: buildSystemPrompt(targetLang, vocab),
+          messages: history,
+          ...(tools.length > 0 ? { tools } : {}),
+        })
 
-      const finalMessage = await stream.finalMessage()
-      const finalText = finalMessage.content
-        .filter((b): b is Anthropic.TextBlock => b.type === 'text')
-        .map((b) => b.text)
-        .join('')
-      assistantText = finalText || assistantText
+        stream.on('text', (delta) => {
+          iterationText += delta
+          fullAssistantText += delta
+          send({ type: 'response_text', delta })
+        })
 
-      history.push({ role: 'assistant', content: assistantText })
-      await persistMessage(env.DB, conversationId, 'assistant', assistantText)
+        const finalMessage = await stream.finalMessage()
 
-      await streamTTS(assistantText, server, env)
+        // Collect text from the response
+        const textBlocks = finalMessage.content
+          .filter((b): b is Anthropic.TextBlock => b.type === 'text')
+          .map((b) => b.text)
+          .join('')
+        if (textBlocks && !iterationText) {
+          fullAssistantText += textBlocks
+        }
 
-      // Mark vocab as seen so the next turn picks different words.
+        // Check for tool calls
+        const toolUseBlocks = finalMessage.content.filter(
+          (b): b is Anthropic.ToolUseBlock => b.type === 'tool_use',
+        )
+
+        if (finalMessage.stop_reason !== 'tool_use' || toolUseBlocks.length === 0) {
+          // No tool calls — normal end of turn
+          break
+        }
+
+        // Append the assistant's response (with tool_use blocks) to history
+        history.push({ role: 'assistant', content: finalMessage.content })
+
+        // Execute each tool call and collect results
+        const toolResults: Anthropic.ToolResultBlockParam[] = []
+        for (const block of toolUseBlocks) {
+          const result = await executeToolCall(
+            block.name,
+            block.input as Record<string, unknown>,
+            block.id,
+            { env, userId, server, send, targetLang, pendingWidget },
+          )
+          toolResults.push({
+            type: 'tool_result',
+            tool_use_id: block.id,
+            content: result,
+          })
+        }
+
+        // Feed tool results back as a user message
+        history.push({ role: 'user', content: toolResults })
+      }
+
+      // Persist the final assistant text
+      if (fullAssistantText.trim()) {
+        history.push({ role: 'assistant', content: fullAssistantText })
+        await persistMessage(env.DB, conversationId, 'assistant', fullAssistantText)
+      }
+
+      // TTS the text response (skip if the turn was pure tool calls with no text)
+      if (fullAssistantText.trim()) {
+        await streamTTS(fullAssistantText, server, env)
+      }
+
+      // Mark vocab as seen
       if (vocab.length > 0) {
         await markVocabSeen(env.DB, userId, vocab).catch((err) =>
           console.warn('[iris] markVocabSeen failed:', err),
@@ -525,6 +625,238 @@ async function fetchWithRetry(
 
 function sleep(ms: number): Promise<void> {
   return new Promise((r) => setTimeout(r, ms))
+}
+
+// ---- Tool execution ----
+
+interface ToolContext {
+  env: Env
+  userId: string
+  server: WebSocket
+  send: (payload: Record<string, unknown>) => void
+  targetLang: { code: string; name: string; english: string } | null
+  pendingWidget: {
+    widgetId: string | null
+    resolve: ((answers: FlashcardMatchingAnswer[]) => void) | null
+    reject: ((reason: string) => void) | null
+    timer: ReturnType<typeof setTimeout> | null
+    correctMap: Map<string, { correct_index: number; correct_answer: string; word: string }>
+  }
+}
+
+async function executeToolCall(
+  name: string,
+  input: Record<string, unknown>,
+  toolUseId: string,
+  ctx: ToolContext,
+): Promise<string> {
+  if (name === 'flashcard') {
+    return executeFlashcard(input, ctx)
+  }
+  return `Unknown tool: ${name}`
+}
+
+async function executeFlashcard(
+  input: Record<string, unknown>,
+  ctx: ToolContext,
+): Promise<string> {
+  const { env, userId, send, targetLang, pendingWidget } = ctx
+
+  // Validate
+  if (!targetLang) return 'Please select a language first.'
+  const mode = input.mode as string
+  if (mode !== 'matching') return 'Only matching mode is supported in Phase 1.'
+  const count = Math.max(1, Math.min(20, Number(input.count) || 10))
+  const cefrLevel = (input.cefr_level as string) || undefined
+
+  // Query vocab
+  const vocabCards = await pickVocab(env.DB, userId, targetLang.code, count, cefrLevel)
+  if (vocabCards.length === 0) {
+    return `No vocabulary available for ${targetLang.english}. Try a different CEFR level.`
+  }
+
+  // Generate distractors for each card
+  const widgetId = newId()
+  const cards: FlashcardMatchingCard[] = []
+  const correctMap = new Map<string, { correct_index: number; correct_answer: string; word: string }>()
+
+  for (const vc of vocabCards) {
+    const cardId = newId()
+    const correctAnswer = vc.sentence_en || vc.lemma
+
+    // Get distractors: other words at same CEFR level
+    const distractorResult = await env.DB
+      .prepare(
+        `SELECT DISTINCT e.sentence_en FROM vocab_items v
+         JOIN vocab_examples e ON e.vocab_item_id = v.id
+         WHERE v.language = ? AND v.cefr_level = ? AND v.lemma != ?
+         ORDER BY RANDOM() LIMIT 3`,
+      )
+      .bind(targetLang.code, vc.cefr_level, vc.lemma)
+      .all<{ sentence_en: string }>()
+
+    let distractors = (distractorResult.results || []).map((r) => r.sentence_en)
+
+    // Fallback to adjacent CEFR levels if not enough distractors
+    if (distractors.length < 3) {
+      const fallbackResult = await env.DB
+        .prepare(
+          `SELECT DISTINCT e.sentence_en FROM vocab_items v
+           JOIN vocab_examples e ON e.vocab_item_id = v.id
+           WHERE v.language = ? AND v.lemma != ? AND e.sentence_en != ?
+           ORDER BY RANDOM() LIMIT ?`,
+        )
+        .bind(targetLang.code, vc.lemma, correctAnswer, 3 - distractors.length)
+        .all<{ sentence_en: string }>()
+      distractors = distractors.concat((fallbackResult.results || []).map((r) => r.sentence_en))
+    }
+
+    // Ensure exactly 3 distractors (pad with generic if DB is sparse)
+    while (distractors.length < 3) {
+      distractors.push(`[option ${distractors.length + 2}]`)
+    }
+
+    // Shuffle options: correct answer + 3 distractors
+    const options = [correctAnswer, ...distractors.slice(0, 3)]
+    const shuffled = options
+      .map((o, i) => ({ o, sort: Math.random(), origIdx: i }))
+      .sort((a, b) => a.sort - b.sort)
+    const shuffledOptions = shuffled.map((s) => s.o)
+    const correctIndex = shuffled.findIndex((s) => s.origIdx === 0)
+
+    cards.push({ card_id: cardId, word: vc.display || `${vc.article ? vc.article + ' ' : ''}${vc.lemma}`, options: shuffledOptions })
+    correctMap.set(cardId, { correct_index: correctIndex, correct_answer: correctAnswer, word: vc.display || vc.lemma })
+  }
+
+  // Store correct answers server-side
+  pendingWidget.correctMap = correctMap
+  pendingWidget.widgetId = widgetId
+
+  // Send widget to client (no correct_index!)
+  const widget: FlashcardMatchingWidget = {
+    type: 'flashcard-matching',
+    widget_id: widgetId,
+    cards,
+    cefr_level: vocabCards[0]?.cefr_level || 'A1',
+  }
+  send({ type: 'widget', widget })
+
+  // Wait for response or timeout
+  let answers: FlashcardMatchingAnswer[]
+  try {
+    answers = await new Promise<FlashcardMatchingAnswer[]>((resolve, reject) => {
+      pendingWidget.resolve = resolve
+      pendingWidget.reject = reject
+      pendingWidget.timer = setTimeout(() => {
+        pendingWidget.widgetId = null
+        pendingWidget.resolve = null
+        pendingWidget.reject = null
+        pendingWidget.timer = null
+        reject('Widget timed out — user did not respond within 5 minutes')
+      }, WIDGET_TIMEOUT_MS)
+    })
+  } catch (reason) {
+    pendingWidget.widgetId = null
+    pendingWidget.correctMap.clear()
+    return typeof reason === 'string' ? reason : 'Widget cancelled'
+  }
+
+  // Grade
+  const answerMap = new Map(answers.map((a) => [a.card_id, a.selected_index]))
+  const cardResults: FlashcardMatchingCardResult[] = []
+  let correctCount = 0
+
+  for (const card of cards) {
+    const correct = correctMap.get(card.card_id)!
+    const selectedIndex = answerMap.get(card.card_id) ?? -1
+    const isCorrect = selectedIndex === correct.correct_index
+    if (isCorrect) correctCount++
+    cardResults.push({
+      card_id: card.card_id,
+      word: correct.word,
+      correct_answer: correct.correct_answer,
+      correct_index: correct.correct_index,
+      selected_index: selectedIndex,
+      correct: isCorrect,
+    })
+  }
+
+  // Send result to client (with revealed answers)
+  send({
+    type: 'widget_result',
+    widget_id: widgetId,
+    widget_type: 'flashcard-matching',
+    score: correctCount,
+    total: cards.length,
+    cards: cardResults,
+  })
+
+  // SM-2 updates
+  for (const cr of cardResults) {
+    const vocab = vocabCards.find((v) => correctMap.get(cr.card_id)?.word === (v.display || v.lemma))
+    if (!vocab) continue
+    try {
+      await updateSm2(env.DB, userId, vocab.lemma, targetLang.code, cr.correct)
+    } catch (err) {
+      console.warn(`[iris] SM-2 update failed for ${vocab.lemma}:`, err)
+    }
+  }
+
+  // Clean up
+  pendingWidget.widgetId = null
+  pendingWidget.correctMap.clear()
+
+  // Build text summary for Claude
+  const summary = cardResults.map((c) => `${c.word} ${c.correct ? '✓' : '✗'}`).join(', ')
+  return `User scored ${correctCount}/${cards.length}: ${summary}`
+}
+
+async function updateSm2(
+  db: D1Database,
+  userId: string,
+  lemma: string,
+  langCode: string,
+  correct: boolean,
+): Promise<void> {
+  const now = nowSec()
+  const prev = await db
+    .prepare(
+      `SELECT p.ease, p.interval_days FROM user_vocab_progress p
+       JOIN vocab_items v ON v.id = p.vocab_item_id
+       WHERE p.user_id = ? AND v.lemma = ? AND v.language = ?
+       LIMIT 1`,
+    )
+    .bind(userId, lemma, langCode)
+    .first<{ ease: number; interval_days: number }>()
+
+  const ease = prev?.ease ?? 2.5
+  const interval = prev?.interval_days ?? 0
+
+  let newEase: number
+  let newInterval: number
+  if (correct) {
+    newInterval = interval === 0 ? 1 : interval === 1 ? 6 : Math.round(interval * ease)
+    newEase = Math.max(1.3, ease + 0.1)
+  } else {
+    newInterval = 0
+    newEase = Math.max(1.3, ease - 0.2)
+  }
+
+  const dueAt = now + newInterval * 86400
+
+  await db
+    .prepare(
+      `INSERT INTO user_vocab_progress (user_id, vocab_item_id, ease, interval_days, due_at, last_seen_at, correct_count, incorrect_count)
+       SELECT ?, v.id, ?, ?, ?, ?, ?, ?
+       FROM vocab_items v WHERE v.lemma = ? AND v.language = ? AND v.source = 'goethe' LIMIT 1
+       ON CONFLICT (user_id, vocab_item_id)
+       DO UPDATE SET ease = excluded.ease, interval_days = excluded.interval_days,
+         due_at = excluded.due_at, last_seen_at = excluded.last_seen_at,
+         correct_count = correct_count + excluded.correct_count,
+         incorrect_count = incorrect_count + excluded.incorrect_count`,
+    )
+    .bind(userId, newEase, newInterval, dueAt, now, correct ? 1 : 0, correct ? 0 : 1, lemma, langCode)
+    .run()
 }
 
 async function markVocabSeen(
