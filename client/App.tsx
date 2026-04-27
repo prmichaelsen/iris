@@ -404,7 +404,12 @@ export default function App({ user, signOut }: AppProps) {
                         score={wt.result.score}
                         total={wt.result.total}
                         onRetake={() => {
-                          wsRef.current?.send(JSON.stringify({ type: 'widget_retake', widget_id: wt.widget.widget_id }))
+                          setActiveWidget(wt.widget)
+                          setHistory((h) => h.map((t) =>
+                            t.widgets?.some((w) => w.widget.widget_id === wt.widget.widget_id)
+                              ? { ...t, widgets: t.widgets!.map((w) => w.widget.widget_id === wt.widget.widget_id ? { widget: w.widget } : w) }
+                              : t,
+                          ))
                         }}
                       />
                     ) : isActive ? (
@@ -426,7 +431,12 @@ export default function App({ user, signOut }: AppProps) {
                         key={wt.widget.widget_id}
                         result={wt.result as FlashcardFreeformResultType}
                         onRetake={() => {
-                          wsRef.current?.send(JSON.stringify({ type: 'widget_retake', widget_id: wt.widget.widget_id }))
+                          setActiveWidget(wt.widget)
+                          setHistory((h) => h.map((t) =>
+                            t.widgets?.some((w) => w.widget.widget_id === wt.widget.widget_id)
+                              ? { ...t, widgets: t.widgets!.map((w) => w.widget.widget_id === wt.widget.widget_id ? { widget: w.widget } : w) }
+                              : t,
+                          ))
                         }}
                       />
                     ) : isActive ? (
@@ -451,7 +461,12 @@ export default function App({ user, signOut }: AppProps) {
                         score={wt.result.score}
                         total={wt.result.total}
                         onRetake={() => {
-                          wsRef.current?.send(JSON.stringify({ type: 'widget_retake', widget_id: wt.widget.widget_id }))
+                          setActiveWidget(wt.widget)
+                          setHistory((h) => h.map((t) =>
+                            t.widgets?.some((w) => w.widget.widget_id === wt.widget.widget_id)
+                              ? { ...t, widgets: t.widgets!.map((w) => w.widget.widget_id === wt.widget.widget_id ? { widget: w.widget } : w) }
+                              : t,
+                          ))
                         }}
                       />
                     ) : isActive ? (
@@ -476,7 +491,12 @@ export default function App({ user, signOut }: AppProps) {
                         score={wt.result.score}
                         total={wt.result.total}
                         onRetake={() => {
-                          wsRef.current?.send(JSON.stringify({ type: 'widget_retake', widget_id: wt.widget.widget_id }))
+                          setActiveWidget(wt.widget)
+                          setHistory((h) => h.map((t) =>
+                            t.widgets?.some((w) => w.widget.widget_id === wt.widget.widget_id)
+                              ? { ...t, widgets: t.widgets!.map((w) => w.widget.widget_id === wt.widget.widget_id ? { widget: w.widget } : w) }
+                              : t,
+                          ))
                         }}
                       />
                     ) : isActive ? (
@@ -501,7 +521,12 @@ export default function App({ user, signOut }: AppProps) {
                         score={wt.result.score}
                         total={wt.result.total}
                         onRetake={() => {
-                          wsRef.current?.send(JSON.stringify({ type: 'widget_retake', widget_id: wt.widget.widget_id }))
+                          setActiveWidget(wt.widget)
+                          setHistory((h) => h.map((t) =>
+                            t.widgets?.some((w) => w.widget.widget_id === wt.widget.widget_id)
+                              ? { ...t, widgets: t.widgets!.map((w) => w.widget.widget_id === wt.widget.widget_id ? { widget: w.widget } : w) }
+                              : t,
+                          ))
                         }}
                       />
                     ) : isActive ? (
