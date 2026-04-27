@@ -391,7 +391,7 @@ export default function App({ user, signOut }: AppProps) {
                     </button>
                   )}
                 </div>
-                {turn.text && <div className="text">{turn.text}</div>}
+                {turn.text && !turn.text.startsWith('[{') && <div className="text">{turn.text}</div>}
                 {turn.widgets?.map((wt) => {
                   const isActive = activeWidget?.widget_id === wt.widget.widget_id
 

@@ -60,7 +60,8 @@ async function executeFlashcard(
       .bind(vc.lemma, targetLang.code)
       .first<{ id: number; gloss_en: string | null }>()
 
-    const correctAnswer = vocabRow?.gloss_en || vc.lemma
+    if (!vocabRow?.gloss_en) continue
+    const correctAnswer = vocabRow.gloss_en
     const word = vc.article ? `${vc.article} ${vc.lemma}` : vc.lemma
 
     let distractors: string[] = []

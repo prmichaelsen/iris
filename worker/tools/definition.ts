@@ -69,12 +69,14 @@ async function executeDefinition(
 
   for (const vc of vocabCards) {
     const cardId = newId()
-    const vocabRow = await env.DB
+    let vocabRow = await env.DB
       .prepare("SELECT id, gloss_en FROM vocab_items WHERE lemma = ? AND language = ? AND source = 'goethe' LIMIT 1")
       .bind(vc.lemma, targetLang.code)
       .first<{ id: number; gloss_en: string | null }>()
 
-    const expectedMeaning = vocabRow?.gloss_en || vc.lemma
+    if (!vocabRow?.gloss_en) continue
+
+    const expectedMeaning = vocabRow.gloss_en
     const word = vc.article ? `${vc.article} ${vc.lemma}` : vc.lemma
 
     const card: DefinitionCard = {
