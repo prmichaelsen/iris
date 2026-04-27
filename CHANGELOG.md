@@ -4,6 +4,28 @@ All notable changes to Iris are documented here. Format follows [Keep a Changelo
 
 ## [Unreleased]
 
+### Added
+- **M9 milestone planning (Foundation + UX + OpenAPI)**: comprehensive 2-week milestone with 8 tasks (~60 hours) establishing gamification foundation before vertical slice implementation
+  - OpenAPI 3.0+ specification for all 40+ gamification endpoints (progress, quests, badges, points, map, characters, pen pals, collections)
+  - UX patterns document covering 10 major surfaces (progress page, badges, map, character interactions, foto gallery, pen pal interface, collections)
+  - D1 schema design with 20+ tables (user_progress, quests, badges, points, regions, characters, pen_pals, fotos, fairy_tales)
+  - Base MCP tools (set_context, view_progress, debug_state) enabling early testing via Claude conversations
+  - Visual design system (badge tiers with chrome effects, color palettes, animations, typography)
+  - Testing strategy with TDD-first workflow (write tests before implementation, watch mode, pre-commit hooks)
+- **M10-M15 roadmap**: vertical slice strategy for gamification implementation
+  - M10: Berlin Vertical Slice (Karl + Mila E2E) validates full stack
+  - M11: Hamburg + Lena (map system)
+  - M12: Bavaria + Thomas (photo system)
+  - M13: Rhine + Black Forest (Klaus + Emma)
+  - M14: Saxony + Austria + Switzerland (Henrik + Sophie + Marco)
+  - M15: Polish + UI Implementation
+- **TDD approach mandated**: all M10+ features must write tests first based on spec, then implement. Watch mode runs tests on every file change, pre-commit hooks prevent broken code from entering repo.
+- **Image generation approach documented**: use nanobanana + Vertex API (same as scenecraft-engine) for Foto generation. Images pre-generated and cached in R2, not generated on unlock.
+
+### Changed
+- **MCP-first development strategy**: backend features testable via Claude conversations before UI exists. Enables parallel backend/frontend work and early E2E validation without waiting for UI implementation.
+- **UX design upfront, UI implementation later**: M9 defines interaction patterns and flows, M15 implements React components. Prevents blocking backend work on UI decisions.
+
 ## [0.9.0] - 2026-04-27
 
 ### Added
