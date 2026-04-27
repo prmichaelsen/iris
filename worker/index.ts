@@ -114,6 +114,56 @@ export default {
       return handleWebSocket(request, env)
     }
 
+    if (url.pathname === '/api/debug/tool-test') {
+      try {
+        const name = url.searchParams.get('name') || 'flashcard'
+        const mode = url.searchParams.get('mode') || 'matching'
+        const tools = getTools({ code: 'deu' })
+        const toolNames = tools.map((t) => t.name)
+
+        // Test the pickNouns query directly
+        const nouns = await env.DB
+          .prepare(`SELECT v.lemma, v.pos, v.article FROM vocab_items v WHERE v.language = 'deu' AND v.pos = 'noun' AND v.article IS NOT NULL LIMIT 3`)
+          .bind()
+          .all()
+
+        // Actually execute the tool call and capture the result
+        let toolResult = 'skipped'
+        if (url.searchParams.get('exec') === '1') {
+          try {
+            const mockSend = (p: Record<string, unknown>) => { /* noop */ }
+            const { WidgetContentBlock } = await import('../shared/types/widgets')
+            toolResult = await executeToolCall(
+              name,
+              { mode, count: 2 },
+              {
+                env,
+                userId: 'debug-test',
+                server: null as any,
+                send: mockSend,
+                targetLang: { code: 'deu', name: 'Deutsch', english: 'German' },
+                turnWidgetBlocks: [],
+                pendingWidget: { widgetId: null, resolve: null, reject: null, timer: null, correctMap: new Map() },
+              },
+            )
+          } catch (err) {
+            toolResult = `THREW: ${err instanceof Error ? err.stack || err.message : String(err)}`
+          }
+        }
+
+        return Response.json({
+          tools_registered: toolNames,
+          requested: { name, mode },
+          mode_normalized: mode.replace(/_/g, '-'),
+          noun_sample: nouns.results,
+          noun_count: nouns.results?.length,
+          tool_result: toolResult,
+        })
+      } catch (err) {
+        return Response.json({ error: err instanceof Error ? err.message : String(err) }, { status: 500 })
+      }
+    }
+
     if (url.pathname === '/api/auth/signup' && request.method === 'POST') {
       return handleSignup(request, env)
     }
@@ -457,7 +507,6 @@ async function handleWebSocket(request: Request, env: Env): Promise<Response> {
           const result = await executeToolCall(
             block.name,
             block.input as Record<string, unknown>,
-            block.id,
             { env, userId, server, send, targetLang, turnWidgetBlocks, pendingWidget },
           )
           toolResults.push({
@@ -630,17 +679,7 @@ interface ToolContext {
   }
 }
 
-async function executeToolCall(
-  name: string,
-  input: Record<string, unknown>,
-  toolUseId: string,
-  ctx: ToolContext,
-): Promise<string> {
-  if (name === 'flashcard') {
-    return executeFlashcard(input, ctx)
-  }
-  return `Unknown tool: ${name}`
-}
+// Inline executeToolCall REMOVED — use the imported one from ./tools/index.ts
 
 async function executeFlashcard(
   input: Record<string, unknown>,

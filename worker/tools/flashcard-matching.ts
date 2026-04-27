@@ -12,7 +12,7 @@ const WIDGET_TIMEOUT_MS = 300_000
 export const flashcardMatchingTool: ToolRegistration = {
   tool: {
     name: 'flashcard',
-    description: `Start a flashcard exercise. Modes: matching (vocab translation), gender-pick (German noun gender). Use when the user wants to practice, drill, or review. Say something encouraging before calling this tool.`,
+    description: `Start an interactive quiz widget. Available modes: matching (show German word, pick English translation from 4 options), gender-pick (show German noun without article, pick der/die/das). Use matching for vocabulary practice. Use gender-pick when the user asks about noun genders, articles, der/die/das, or gender quizzes. Always try the tool — never tell the user a mode is unavailable without calling it first.`,
     input_schema: {
       type: 'object' as const,
       properties: {
