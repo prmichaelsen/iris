@@ -45,10 +45,75 @@ function targetPrompt(nativeName: string, englishName: string): string {
 - If the transcript looks garbled, assume the user was attempting ${nativeName} with imperfect pronunciation and make your best guess from context.`
 }
 
-function buildSystemPrompt(targetLang: { code: string; name: string; english: string } | null): string {
-  return targetLang
+interface VocabCard {
+  lemma: string
+  display: string
+  article: string | null
+  cefr_level: string
+  sentence_de: string
+  sentence_en: string
+}
+
+function vocabBlock(cards: VocabCard[]): string {
+  if (cards.length === 0) return ''
+  const lines = cards.map((c) => {
+    const word = c.article ? `${c.article} ${c.lemma}` : c.lemma
+    return `- ${word} (${c.cefr_level}) — "${c.sentence_de}" / "${c.sentence_en}"`
+  })
+  return `\n\nToday's vocabulary to weave into conversation (use at least 2–3 of these naturally in your replies — don't drill or list them, just use them as if they're normal words you'd choose):\n${lines.join('\n')}`
+}
+
+function buildSystemPrompt(
+  targetLang: { code: string; name: string; english: string } | null,
+  vocab: VocabCard[] = [],
+): string {
+  const base = targetLang
     ? `${BASE_PROMPT}\n\n${targetPrompt(targetLang.name, targetLang.english)}`
     : `${BASE_PROMPT}\n\n${NO_TARGET_PROMPT}`
+  return base + vocabBlock(vocab)
+}
+
+async function pickVocab(
+  db: D1Database,
+  userId: string,
+  langCode: string,
+  count = 5,
+): Promise<VocabCard[]> {
+  // Prefer words the user hasn't seen, or words that are due for review.
+  // Falls back to random unseen words at the lowest available CEFR level.
+  const result = await db
+    .prepare(
+      `SELECT v.lemma, v.display, v.article, v.cefr_level,
+              e.sentence_de, e.sentence_en
+       FROM vocab_items v
+       LEFT JOIN vocab_examples e ON e.vocab_item_id = v.id
+       LEFT JOIN user_vocab_progress p ON p.vocab_item_id = v.id AND p.user_id = ?
+       WHERE v.language = ?
+       ORDER BY
+         CASE WHEN p.due_at IS NULL THEN 0 ELSE 1 END,  -- unseen first
+         CASE WHEN p.due_at IS NOT NULL AND p.due_at <= ? THEN 0 ELSE 1 END,  -- due items next
+         v.cefr_level ASC,  -- lower CEFR first
+         RANDOM()
+       LIMIT ?`,
+    )
+    .bind(userId, langCode, nowSec(), count)
+    .all<{
+      lemma: string
+      display: string
+      article: string | null
+      cefr_level: string
+      sentence_de: string | null
+      sentence_en: string | null
+    }>()
+
+  return (result.results || []).map((r) => ({
+    lemma: r.lemma,
+    display: r.display,
+    article: r.article,
+    cefr_level: r.cefr_level,
+    sentence_de: r.sentence_de ?? '',
+    sentence_en: r.sentence_en ?? '',
+  }))
 }
 
 export default {
@@ -312,11 +377,17 @@ async function handleWebSocket(request: Request, env: Env): Promise<Response> {
       history.push({ role: 'user', content: transcript })
       await persistMessage(env.DB, conversationId, 'user', transcript)
 
+      // Pick vocabulary cards for this turn — injected into the system prompt
+      // so Iris weaves them into conversation naturally.
+      const vocab = targetLang
+        ? await pickVocab(env.DB, userId, targetLang.code, 5)
+        : []
+
       let assistantText = ''
       const stream = anthropic.messages.stream({
         model: MODEL,
         max_tokens: 512,
-        system: buildSystemPrompt(targetLang),
+        system: buildSystemPrompt(targetLang, vocab),
         messages: history,
       })
 
@@ -336,6 +407,14 @@ async function handleWebSocket(request: Request, env: Env): Promise<Response> {
       await persistMessage(env.DB, conversationId, 'assistant', assistantText)
 
       await streamTTS(assistantText, server, env)
+
+      // Mark vocab as seen so the next turn picks different words.
+      if (vocab.length > 0) {
+        await markVocabSeen(env.DB, userId, vocab).catch((err) =>
+          console.warn('[iris] markVocabSeen failed:', err),
+        )
+      }
+
       send({ type: 'done' })
     } catch (err) {
       console.error('[iris] turn failed:', err)
@@ -446,6 +525,28 @@ async function fetchWithRetry(
 
 function sleep(ms: number): Promise<void> {
   return new Promise((r) => setTimeout(r, ms))
+}
+
+async function markVocabSeen(
+  db: D1Database,
+  userId: string,
+  cards: VocabCard[],
+): Promise<void> {
+  const now = nowSec()
+  const stmts = cards.map((c) =>
+    db
+      .prepare(
+        `INSERT INTO user_vocab_progress (user_id, vocab_item_id, last_seen_at, due_at, correct_count)
+         SELECT ?, v.id, ?, ? + 86400, 0
+         FROM vocab_items v
+         WHERE v.lemma = ? AND v.language = 'deu' AND v.source = 'goethe'
+         LIMIT 1
+         ON CONFLICT (user_id, vocab_item_id)
+         DO UPDATE SET last_seen_at = excluded.last_seen_at`,
+      )
+      .bind(userId, now, now, c.lemma),
+  )
+  await db.batch(stmts)
 }
 
 // ---- Conversation persistence (D1) ----

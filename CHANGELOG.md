@@ -2,6 +2,21 @@
 
 All notable changes to Iris are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versioning follows [SemVer](https://semver.org/).
 
+## [0.7.0] - 2026-04-27
+
+### Added
+- **Iris-aware vocabulary**: each voice turn now queries D1 for 5 CEFR-graded vocab items and injects them into the system prompt. Iris weaves them into conversation naturally — no drilling, no listing, just organic usage. Words are selected from the Goethe Wortlisten seeded in v0.6.0.
+- **Spaced-repetition tracking**: after each turn, the 5 vocab items are recorded in `user_vocab_progress` with `last_seen_at` and `due_at` (24h from now). Subsequent turns prioritize unseen words first, then words due for review, then lowest CEFR level, then random. Over time the user works through A1 → A2 → B1 organically.
+- **`pickVocab()` query**: LEFT JOINs `vocab_items` with `user_vocab_progress` and orders by unseen → due → CEFR → random. Efficient single query, ~1.4ms on D1.
+- **`markVocabSeen()`**: batched `INSERT ... ON CONFLICT DO UPDATE` via `db.batch()` — upserts 5 progress rows per turn. Fire-and-forget with error swallowed (non-critical path).
+
+### Changed
+- `buildSystemPrompt()` now accepts an optional `VocabCard[]` parameter. When cards are present, a "Today's vocabulary" block is appended instructing Iris to use at least 2–3 of the words naturally.
+
+### Notes
+- Vocab injection only fires when a target language is selected (German for now). Auto mode skips it since we don't know which language to pull from.
+- The SM-2 `ease` and `interval_days` fields exist in the schema but aren't updated yet — the current implementation uses a flat 24h `due_at`. Full SM-2 scoring (based on user recall accuracy) is a follow-up once we have a review UI where the user rates their own recall.
+
 ## [0.6.0] - 2026-04-26
 
 ### Added
