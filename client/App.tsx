@@ -404,12 +404,7 @@ export default function App({ user, signOut }: AppProps) {
                         score={wt.result.score}
                         total={wt.result.total}
                         onRetake={() => {
-                          setActiveWidget(wt.widget)
-                          setHistory((h) => h.map((t) =>
-                            t.widgets?.some((w) => w.widget.widget_id === wt.widget.widget_id)
-                              ? { ...t, widgets: t.widgets!.map((w) => w.widget.widget_id === wt.widget.widget_id ? { widget: w.widget } : w) }
-                              : t,
-                          ))
+                          wsRef.current?.send(JSON.stringify({ type: 'widget_retake', widget_id: wt.widget.widget_id }))
                         }}
                       />
                     ) : isActive ? (
@@ -431,12 +426,7 @@ export default function App({ user, signOut }: AppProps) {
                         key={wt.widget.widget_id}
                         result={wt.result as FlashcardFreeformResultType}
                         onRetake={() => {
-                          setActiveWidget(wt.widget)
-                          setHistory((h) => h.map((t) =>
-                            t.widgets?.some((w) => w.widget.widget_id === wt.widget.widget_id)
-                              ? { ...t, widgets: t.widgets!.map((w) => w.widget.widget_id === wt.widget.widget_id ? { widget: w.widget } : w) }
-                              : t,
-                          ))
+                          wsRef.current?.send(JSON.stringify({ type: 'widget_retake', widget_id: wt.widget.widget_id }))
                         }}
                       />
                     ) : isActive ? (
@@ -461,12 +451,7 @@ export default function App({ user, signOut }: AppProps) {
                         score={wt.result.score}
                         total={wt.result.total}
                         onRetake={() => {
-                          setActiveWidget(wt.widget)
-                          setHistory((h) => h.map((t) =>
-                            t.widgets?.some((w) => w.widget.widget_id === wt.widget.widget_id)
-                              ? { ...t, widgets: t.widgets!.map((w) => w.widget.widget_id === wt.widget.widget_id ? { widget: w.widget } : w) }
-                              : t,
-                          ))
+                          wsRef.current?.send(JSON.stringify({ type: 'widget_retake', widget_id: wt.widget.widget_id }))
                         }}
                       />
                     ) : isActive ? (
@@ -491,12 +476,7 @@ export default function App({ user, signOut }: AppProps) {
                         score={wt.result.score}
                         total={wt.result.total}
                         onRetake={() => {
-                          setActiveWidget(wt.widget)
-                          setHistory((h) => h.map((t) =>
-                            t.widgets?.some((w) => w.widget.widget_id === wt.widget.widget_id)
-                              ? { ...t, widgets: t.widgets!.map((w) => w.widget.widget_id === wt.widget.widget_id ? { widget: w.widget } : w) }
-                              : t,
-                          ))
+                          wsRef.current?.send(JSON.stringify({ type: 'widget_retake', widget_id: wt.widget.widget_id }))
                         }}
                       />
                     ) : isActive ? (
@@ -521,12 +501,7 @@ export default function App({ user, signOut }: AppProps) {
                         score={wt.result.score}
                         total={wt.result.total}
                         onRetake={() => {
-                          setActiveWidget(wt.widget)
-                          setHistory((h) => h.map((t) =>
-                            t.widgets?.some((w) => w.widget.widget_id === wt.widget.widget_id)
-                              ? { ...t, widgets: t.widgets!.map((w) => w.widget.widget_id === wt.widget.widget_id ? { widget: w.widget } : w) }
-                              : t,
-                          ))
+                          wsRef.current?.send(JSON.stringify({ type: 'widget_retake', widget_id: wt.widget.widget_id }))
                         }}
                       />
                     ) : isActive ? (

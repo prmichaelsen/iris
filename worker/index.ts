@@ -346,6 +346,58 @@ async function handleWebSocket(request: Request, env: Env): Promise<Response> {
           pendingWidget.resolve = null
           pendingWidget.reject = null
           pendingWidget.timer = null
+        } else if (msg.type === 'widget_retake') {
+          // Retake: treat as a new voice turn with a retake request
+          const retakeText = 'Please start another round of the same type of quiz.'
+          history.push({ role: 'user', content: retakeText })
+          await persistMessage(env.DB, conversationId, 'user', retakeText)
+
+          // Re-use the same tool-use loop as a normal voice turn
+          const vocab = targetLang ? await pickVocab(env.DB, userId, targetLang.code, 5) : []
+          const tools = getTools(targetLang)
+          const turnWidgetBlocks: WidgetContentBlock[] = []
+          let fullAssistantText = ''
+
+          for (let iteration = 0; iteration < MAX_TOOL_ITERATIONS; iteration++) {
+            const stream = anthropic.messages.stream({
+              model: MODEL,
+              max_tokens: 1024,
+              system: buildSystemPrompt(targetLang, vocab),
+              messages: sanitizeToolMessages(history),
+              ...(tools.length > 0 ? { tools } : {}),
+            })
+            stream.on('text', (delta) => {
+              fullAssistantText += delta
+              send({ type: 'response_text', delta })
+            })
+            const finalMessage = await stream.finalMessage()
+            const toolUseBlocks = finalMessage.content.filter(
+              (b): b is Anthropic.ToolUseBlock => b.type === 'tool_use',
+            )
+            if (finalMessage.stop_reason !== 'tool_use' || toolUseBlocks.length === 0) break
+            history.push({ role: 'assistant', content: finalMessage.content })
+            const toolResults: Anthropic.ToolResultBlockParam[] = []
+            for (const block of toolUseBlocks) {
+              const result = await executeToolCall(
+                block.name,
+                block.input as Record<string, unknown>,
+                { env, userId, server, send, targetLang, turnWidgetBlocks, pendingWidget },
+              )
+              toolResults.push({ type: 'tool_result', tool_use_id: block.id, content: result })
+            }
+            history.push({ role: 'user', content: toolResults })
+          }
+
+          if (fullAssistantText.trim() || turnWidgetBlocks.length > 0) {
+            const blocks: ContentBlock[] = []
+            if (fullAssistantText.trim()) blocks.push({ type: 'text', text: fullAssistantText })
+            blocks.push(...turnWidgetBlocks)
+            history.push({ role: 'assistant', content: fullAssistantText || '(widget interaction)' })
+            await persistMessage(env.DB, conversationId, 'assistant', turnWidgetBlocks.length > 0 ? blocks : fullAssistantText)
+          }
+          if (fullAssistantText.trim()) await streamTTS(fullAssistantText, server, env)
+          send({ type: 'done' })
+          return
         } else if (msg.type === 'language') {
           // Cancel pending widget on language change
           if (pendingWidget.widgetId && pendingWidget.reject) {
