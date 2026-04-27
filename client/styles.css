@@ -1494,12 +1494,10 @@ footer {
 .word-token {
   position: relative;
   cursor: help;
-  border-bottom: 1px dotted var(--token-underline);
-  transition: background-color 0.1s ease, border-color 0.1s ease;
+  transition: background-color 0.1s ease;
 }
 .word-token:hover {
   background: var(--token-hover-bg);
-  border-bottom-color: var(--token-hover-underline);
 }
 
 .word-popover {
@@ -1588,11 +1586,7 @@ footer {
   display: block;
 }
 
-/* Touch devices: hide dotted hint until mobile UX is fully wired */
 @media (hover: none) {
-  .word-token {
-    border-bottom: none;
-  }
   .word-token:active {
     background: var(--token-hover-bg);
   }
