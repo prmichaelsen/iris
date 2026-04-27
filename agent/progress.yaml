@@ -65,6 +65,55 @@ milestones:
     tasks_total: 0
     tasks_complete: 0
 
+  - id: M9
+    title: Foundation + UX Design + OpenAPI (Gamification)
+    status: planned
+    file: agent/milestones/milestone-9-foundation-ux-openapi.md
+    tasks_total: 8
+    tasks_complete: 0
+
+  - id: M10
+    title: Berlin Vertical Slice - Karl + Mila E2E
+    status: planned
+    file: null
+    tasks_total: 0
+    tasks_complete: 0
+
+  - id: M11
+    title: Map & Regional System - Hamburg + Lena
+    status: planned
+    file: null
+    tasks_total: 0
+    tasks_complete: 0
+
+  - id: M12
+    title: Photo System + Bavaria - Thomas
+    status: planned
+    file: null
+    tasks_total: 0
+    tasks_complete: 0
+
+  - id: M13
+    title: Rhine + Black Forest - Klaus + Emma
+    status: planned
+    file: null
+    tasks_total: 0
+    tasks_complete: 0
+
+  - id: M14
+    title: Saxony + Austria + Switzerland - Henrik + Sophie + Marco
+    status: planned
+    file: null
+    tasks_total: 0
+    tasks_complete: 0
+
+  - id: M15
+    title: Polish + UI Implementation
+    status: planned
+    file: null
+    tasks_total: 0
+    tasks_complete: 0
+
 tasks:
   milestone_4:
     - id: 1
@@ -138,6 +187,76 @@ tasks:
       actual_hours: null
       depends_on: [2, 3, 4, 5, 6, 7]
 
+  milestone_9:
+    - id: 1
+      title: OpenAPI Specification - Core Progress & Quests
+      status: pending
+      file: agent/tasks/milestone-9-foundation-ux-openapi/task-1-openapi-progress-quests.md
+      estimated_hours: 8
+      started: null
+      actual_hours: null
+
+    - id: 2
+      title: OpenAPI Specification - Points, Map, Characters
+      status: pending
+      file: agent/tasks/milestone-9-foundation-ux-openapi/task-2-openapi-points-map-characters.md
+      estimated_hours: 8
+      started: null
+      actual_hours: null
+      depends_on: [1]
+
+    - id: 3
+      title: OpenAPI Specification - Pen Pals & Collections
+      status: pending
+      file: agent/tasks/milestone-9-foundation-ux-openapi/task-3-openapi-penpals-collections.md
+      estimated_hours: 6
+      started: null
+      actual_hours: null
+      depends_on: [2]
+
+    - id: 4
+      title: UX Patterns Document
+      status: pending
+      file: agent/tasks/milestone-9-foundation-ux-openapi/task-4-ux-patterns.md
+      estimated_hours: 10
+      started: null
+      actual_hours: null
+
+    - id: 5
+      title: D1 Schema Design & Migration
+      status: pending
+      file: agent/tasks/milestone-9-foundation-ux-openapi/task-5-d1-schema-migration.md
+      estimated_hours: 8
+      started: null
+      actual_hours: null
+      depends_on: [1, 2, 3]
+
+    - id: 6
+      title: Base MCP Tools Implementation
+      status: pending
+      file: agent/tasks/milestone-9-foundation-ux-openapi/task-6-base-mcp-tools.md
+      estimated_hours: 10
+      started: null
+      actual_hours: null
+      depends_on: [5]
+
+    - id: 7
+      title: Visual Design System Document
+      status: pending
+      file: agent/tasks/milestone-9-foundation-ux-openapi/task-7-visual-design-system.md
+      estimated_hours: 6
+      started: null
+      actual_hours: null
+
+    - id: 8
+      title: Testing Strategy & Documentation
+      status: pending
+      file: agent/tasks/milestone-9-foundation-ux-openapi/task-8-testing-docs.md
+      estimated_hours: 4
+      started: null
+      actual_hours: null
+      depends_on: [1, 2, 3, 4, 5, 6, 7]
+
 documentation:
   design_documents: 2
   milestone_documents: 4
@@ -162,6 +281,8 @@ recent_work:
 
 next_steps:
   - Implement M4 tasks 1-8 (flashcard-matching widget MVP)
+  - Implement M9 tasks 1-8 (gamification foundation + OpenAPI + UX)
+  - Plan M10 (Berlin vertical slice - Karl + Mila E2E) once M9 completes
   - Plan M5 (extended exercises) once M4 is shipped
   - Plan M6 (lesson system) — FSI-derived lesson structures
 
@@ -170,5 +291,8 @@ notes:
   - M4 has a full spec (agent/specs/local.widget-system-phase1.md)
   - Tatoeba data is loaded but no UI uses it yet (future: example sentences for vocab)
   - v0.8.0 added gamification design doc (separate session)
+  - M9 defines gamification foundation: OpenAPI spec, UX patterns, D1 schema, base MCP tools
+  - M9 uses vertical slice strategy: complete one character E2E before scaling to others
+  - M9-M15 follow MCP-first approach: backend testable via Claude conversations before UI exists
 
 current_blockers: []
