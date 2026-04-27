@@ -135,3 +135,17 @@ acp:
         Reference when transferring work across projects or agents.
         Defines freeform report format and target resolution.
       applies: acp.handoff, acp.plan
+
+    - path: agent/design/local.gamification-engagement-system.md
+      weight: 0.9
+      kind: design
+      description: |
+        Comprehensive gamification and engagement system design. Defines
+        progress tracking, quests, badges, point economy, map progression,
+        photo collection, pen pal relationships, and character revisits.
+      rationale: |
+        Core engagement layer for Iris. Must be understood when working on
+        any feature related to user motivation, progress visualization,
+        rewards, or narrative systems. Contains all key design decisions
+        about dopamine loops and positive reinforcement.
+      applies: acp.proceed, acp.plan, acp.task-create, acp.design-create

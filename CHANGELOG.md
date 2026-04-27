@@ -2,6 +2,28 @@
 
 All notable changes to Iris are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versioning follows [SemVer](https://semver.org/).
 
+## [0.8.0] - 2026-04-27
+
+### Added
+- **Gamification & engagement system design**: comprehensive design document (`agent/design/local.gamification-engagement-system.md`) covering progress tracking, quest system with badge progression (Grey → Platinum), point economy with dual-path voice unlocks, map-based regional progression through Germany, photo collection system (Fotos), pen pal relationships with 8 unique characters, character revisit system, sticker collection, loot boxes, and special event quests. Defines all dopamine loops (immediate, short-term, medium-term, long-term) and positive reinforcement mechanisms.
+- **Key design decisions captured**: multi-signal mastery calculation (accuracy, consistency, retention, speed, context transfer), adaptive pen pal letter frequency based on engagement, escalating voice unlock costs (600 → 4000 points) to incentivize story progression, sequential map progression with narrative framing (solo backpacker photographer), gated subquests requiring mastery achievements, premium locations (Berghain bouncer challenge, Jazzclub), cultural recommendations from pen pals, contextual drill suggestions from character revisits.
+- **Design indexed**: added to `agent/index/acp.core.yaml` with weight 0.9 — core engagement layer that must be understood when working on motivation, progress visualization, rewards, or narrative systems.
+
+### Design Philosophy
+- **No punishment mechanics**: "Reinforcement Opportunities" instead of highlighting failures; celebrate effort and progress only
+- **Multiple playstyles**: explorers (follow story), grinders (farm points), collectors (chase Fotos/stickers)
+- **Emotional connection**: pen pals and characters feel like real relationships with memory and personality
+- **Cultural richness**: recommendations open doors to authentic German media (music, films, books, podcasts)
+- **Dynamic mastery**: skills can improve OR degrade based on multiple signals; reflects reality that skills decay without practice
+
+### Implementation Phases
+1. Core Progress & Quests (MVP)
+2. Map & Regional Progression
+3. Photo Collection
+4. Pen Pal System
+5. Character Revisits
+6. Full System Integration (stickers, loot boxes, chat buddies, special events)
+
 ## [0.7.0] - 2026-04-27
 
 ### Added
