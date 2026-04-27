@@ -440,9 +440,11 @@ async function handleWebSocket(request: Request, env: Env): Promise<Response> {
     correctMap: Map<string, { correct_index: number; correct_answer: string; word: string }>
   } = { widgetId: null, resolve: null, reject: null, timer: null, correctMap: new Map() }
 
-  // Load history from D1
-  const history: Anthropic.MessageParam[] = await loadHistory(env.DB, conversationId)
-  console.log(`[iris] loaded ${history.length} prior messages for conversation ${conversationId}`)
+  // Load history from D1 (cap at most recent 100 turns to keep context manageable)
+  const HISTORY_CAP = 100
+  const fullHistory: Anthropic.MessageParam[] = await loadHistory(env.DB, conversationId)
+  const history = fullHistory.slice(-HISTORY_CAP)
+  console.log(`[iris] loaded ${fullHistory.length} prior messages for conversation ${conversationId}, sending last ${history.length}`)
 
   // Send the loaded history to the client so it can render past turns.
   // Uses loadHistoryForClient which parses content_blocks for widget turns.
@@ -517,6 +519,9 @@ async function handleWebSocket(request: Request, env: Env): Promise<Response> {
               failureText += delta
               send({ type: 'response_text', delta })
             })
+            stream.on('error', (err) => {
+              console.error('[iris] stream error (failure path):', err)
+            })
 
             await stream.finalMessage()
 
@@ -561,6 +566,9 @@ async function handleWebSocket(request: Request, env: Env): Promise<Response> {
             stream.on('text', (delta) => {
               fullAssistantText += delta
               send({ type: 'response_text', delta })
+            })
+            stream.on('error', (err) => {
+              console.error('[iris] stream error (main path):', err)
             })
             const finalMessage = await stream.finalMessage()
             const toolUseBlocks = finalMessage.content.filter(
@@ -674,6 +682,9 @@ async function handleWebSocket(request: Request, env: Env): Promise<Response> {
           ...(tools.length > 0 ? { tools } : {}),
         })
 
+        stream.on('error', (err) => {
+          console.error('[iris] stream error (tool-loop path):', err)
+        })
         stream.on('text', (delta) => {
           iterationText += delta
           fullAssistantText += delta

@@ -8,7 +8,7 @@ function routeToolCall(name: string, input: Record<string, unknown>): string {
   if (name === 'flashcard') {
     const mode = ((input.mode as string) || '').replace(/_/g, '-')
     if (mode === 'gender-pick') return 'genderPickTool'
-    if (mode === 'matching') return 'flashcardMatchingTool'
+    if (mode === 'matching') return 'flashcardTool'
     return `unknown-mode:${mode}`
   }
   const knownTools = ['flashcard_freeform', 'definition', 'fill_blank']
@@ -18,7 +18,7 @@ function routeToolCall(name: string, input: Record<string, unknown>): string {
 
 describe('tool dispatch routing', () => {
   it('routes flashcard matching', () => {
-    expect(routeToolCall('flashcard', { mode: 'matching' })).toBe('flashcardMatchingTool')
+    expect(routeToolCall('flashcard', { mode: 'matching' })).toBe('flashcardTool')
   })
 
   it('routes flashcard gender-pick', () => {

@@ -1,9 +1,9 @@
 import Anthropic from '@anthropic-ai/sdk'
 import type { ToolContext, ToolRegistration } from './shared'
 
-import { flashcardMatchingTool } from './flashcard-matching'
+import { flashcardTool } from './flashcard'
 import { flashcardFreeformTool } from './flashcard-freeform'
-import { genderPickTool } from './gender-pick'
+import { executeGenderPick } from './gender-pick'
 import { definitionTool } from './definition'
 import { fillBlankTool } from './fill-blank'
 import { setContextTool, viewProgressTool, debugStateTool } from './gamification'
@@ -13,7 +13,7 @@ import { sendPenPalLetterTool, checkPenPalAttentionTool } from './pen-pals'
 import { studyListTool } from './study-list'
 
 const TOOL_REGISTRY: ToolRegistration[] = [
-  flashcardMatchingTool,
+  flashcardTool,
   flashcardFreeformTool,
   definitionTool,
   fillBlankTool,
@@ -40,9 +40,9 @@ export async function executeToolCall(
   if (name === 'flashcard') {
     const mode = input.mode as string
     if (mode === 'gender-pick') {
-      return genderPickTool.execute(input, ctx)
+      return executeGenderPick(input, ctx)
     } else if (mode === 'matching') {
-      return flashcardMatchingTool.execute(input, ctx)
+      return flashcardTool.execute(input, ctx)
     } else {
       return `Unknown flashcard mode: ${mode}`
     }

@@ -1,36 +1,18 @@
-import Anthropic from '@anthropic-ai/sdk'
+// gender-pick is a mode of the unified `flashcard` tool (see ./flashcard.ts).
+// This file exports only the execution entry point; the dispatcher in
+// ./index.ts routes `flashcard` tool calls with mode='gender-pick' here.
+
 import type {
   GenderPickWidget,
   GenderPickCard,
   GenderPickCardResult,
   GenderPickAnswer,
 } from '../../shared/types/widgets'
-import { updateSm2, newId, nowSec, type ToolContext, type ToolRegistration } from './shared'
+import { updateSm2, newId, nowSec, type ToolContext } from './shared'
 
 const WIDGET_TIMEOUT_MS = 300_000
 
-export const genderPickTool: ToolRegistration = {
-  tool: {
-    name: 'flashcard',
-    description: `Start a flashcard exercise. Modes: matching (vocab translation), gender-pick (German noun gender). Use when the user wants to practice, drill, or review.`,
-    input_schema: {
-      type: 'object' as const,
-      properties: {
-        mode: {
-          type: 'string',
-          enum: ['matching', 'gender-pick'],
-          description: 'Quiz mode. matching: translate vocab; gender-pick: choose der/die/das for German nouns.',
-        },
-        count: { type: 'integer', minimum: 1, maximum: 20, description: 'Number of cards. Default 10.' },
-        cefr_level: { type: 'string', enum: ['A1', 'A2', 'B1'], description: 'Target CEFR level. Omit to auto-detect.' },
-      },
-      required: ['mode'],
-    },
-  },
-  execute: executeGenderPick,
-}
-
-async function executeGenderPick(
+export async function executeGenderPick(
   input: Record<string, unknown>,
   ctx: ToolContext,
 ): Promise<string> {
