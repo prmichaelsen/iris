@@ -1,6 +1,7 @@
 /// MCP tool for consolidated region management
 import Anthropic from '@anthropic-ai/sdk'
 import type { ToolContext, ToolRegistration } from './shared'
+import { updateSessionCharacterState } from '../session-state'
 
 // Valid region IDs from seed data
 const VALID_REGIONS = [
@@ -214,11 +215,19 @@ async function travelToRegion(ctx: ToolContext, regionId: RegionId): Promise<str
     })
   }
 
-  // TODO M10: Update session state in conversations table or session storage
-  // For now, return success with region info
-  // When session storage is implemented, update:
-  // - current_region
-  // - active_voice_id (to region.voice_unlock)
+  // Persist session state per spec R7: travelling updates current_region
+  // and the active_voice_id (the region's unlocked voice).
+  await updateSessionCharacterState(ctx.env.DB, userId, {
+    current_region: fullRegionId,
+    active_voice_id: region.voice_unlock,
+  })
+
+  ctx.send({
+    type: 'character_state',
+    character_id: undefined,
+    voice_id: region.voice_unlock,
+    region: regionId,
+  })
 
   return JSON.stringify({
     success: true,

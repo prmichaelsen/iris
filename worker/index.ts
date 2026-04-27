@@ -21,12 +21,14 @@ import { sanitizeToolMessages } from './sanitize-tool-messages'
 import {
   getOrCreateConversationState,
   incrementStrike,
+  resetStrikes,
   recordUserResponse,
   clearConversationState,
   characterUsesTimer,
   getCharacterTimerConfig,
   type ConversationState,
 } from './conversation-state'
+import { updateSessionCharacterState } from './session-state'
 
 const ELEVEN_API = 'https://api.elevenlabs.io/v1'
 const MODEL = 'claude-opus-4-7'
@@ -650,6 +652,49 @@ async function handleWebSocket(request: Request, env: Env): Promise<Response> {
 
         // Feed tool results back as a user message
         history.push({ role: 'user', content: toolResults })
+
+        // Refresh session state in case a tool (quests.activate / quests.complete /
+        // regions.travel) mutated it. Keeps local closure vars in sync with DB,
+        // and handles 3-strike lifecycle per spec.
+        const refreshed = await env.DB
+          .prepare(
+            'SELECT active_character, active_quest, current_region, active_voice_id FROM sessions WHERE user_id = ? ORDER BY created_at DESC LIMIT 1',
+          )
+          .bind(userId)
+          .first<{
+            active_character: string | null
+            active_quest: string | null
+            current_region: string | null
+            active_voice_id: string | null
+          }>()
+
+        if (refreshed) {
+          const nextCharacterId = refreshed.active_character || 'iris'
+          const nextQuest = refreshed.active_quest
+          const nextRegion = refreshed.current_region || currentRegion
+
+          // Quest activated (new quest started) — reset strikes per spec R15a
+          if (nextQuest && nextQuest !== activeQuest) {
+            resetStrikes(conversationId)
+          }
+          // Quest completed (no longer active) — clear per-conversation state
+          if (!nextQuest && activeQuest) {
+            clearConversationState(conversationId)
+            // Recreate a fresh conversation-state entry for the returning-to-Iris context
+            getOrCreateConversationState(conversationId, nextCharacterId, undefined)
+          }
+
+          if (nextCharacterId !== activeCharacterId) {
+            const nextCharacter = getCharacter(nextCharacterId) || getCharacter('iris')!
+            activeCharacter = nextCharacter
+            activeCharacterId = nextCharacterId
+            activeVoiceId = refreshed.active_voice_id || nextCharacter.voice_id
+          } else if (refreshed.active_voice_id && refreshed.active_voice_id !== activeVoiceId) {
+            activeVoiceId = refreshed.active_voice_id
+          }
+          activeQuest = nextQuest
+          currentRegion = nextRegion
+        }
       }
 
       // Persist the assistant turn — as content blocks if widgets were involved
@@ -1151,45 +1196,6 @@ async function markVocabSeen(
       .bind(userId, now, now, c.lemma),
   )
   await db.batch(stmts)
-}
-
-// ---- Session state management ----
-
-/**
- * Update session character state when switching between characters.
- * Call this when a quest triggers a character change, or when explicitly switching characters.
- *
- * Example usage:
- *   const newCharacter = getCharacter('karl')
- *   if (newCharacter) {
- *     await updateSessionCharacterState(env.DB, userId, 'karl', newCharacter.voice_id, questId, 'berlin')
- *     activeCharacterId = 'karl'
- *     activeCharacter = newCharacter
- *     activeVoiceId = newCharacter.voice_id
- *     send({ type: 'character_state', character_id: 'karl', voice_id: newCharacter.voice_id, quest_id: questId, region: 'berlin' })
- *   }
- */
-async function updateSessionCharacterState(
-  db: D1Database,
-  userId: string,
-  characterId: string,
-  voiceId: string,
-  questId: string | null = null,
-  region: string = 'berlin',
-): Promise<void> {
-  // Update the most recent session for this user
-  await db
-    .prepare(
-      `UPDATE sessions
-       SET active_character = ?,
-           active_voice_id = ?,
-           active_quest = ?,
-           current_region = ?
-       WHERE user_id = ?
-       AND token IN (SELECT token FROM sessions WHERE user_id = ? ORDER BY created_at DESC LIMIT 1)`,
-    )
-    .bind(characterId, voiceId, questId, region, userId, userId)
-    .run()
 }
 
 // ---- Conversation persistence (D1) ----

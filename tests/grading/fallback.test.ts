@@ -89,7 +89,8 @@ describe('claude-grading-malformed-response', () => {
 
     const result = await gradeWithFallback(anthropic)
 
-    expect((result as any)._fallback).toBe(true)
+    // Per spec R17: gradeConversation catches JSON parse errors internally
+    // and returns neutral 5/10 (no throw, so wrapper's _fallback is not set).
     expect(result.overall_score).toBe(5)
     expect(result.metrics.comprehension).toBe(5)
     expect(result.metrics.fluency).toBe(5)
@@ -106,7 +107,7 @@ describe('claude-grading-malformed-response', () => {
     } as unknown as Anthropic
 
     const result = await gradeWithFallback(anthropic)
-    expect((result as any)._fallback).toBe(true)
+    // gradeConversation handles the parse error internally → neutral 5/10.
     expect(result.overall_score).toBe(5)
   })
 

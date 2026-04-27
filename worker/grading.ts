@@ -178,9 +178,21 @@ export async function gradeConversation(
     }
     gradingResult = JSON.parse(jsonMatch[0]);
   } catch (error) {
-    console.error('[grading] Failed to parse Claude response:', error);
+    console.error('[grading] Failed to parse Claude response, applying neutral 5/10 fallback:', error);
     console.error('[grading] Response:', responseText);
-    throw new Error('Failed to parse grading response from Claude');
+    // Graceful fallback per spec R17: neutral 5/10 metrics + generic reasoning.
+    gradingResult = {
+      comprehension: 5,
+      fluency: 5,
+      grammar: 5,
+      vocabulary: 5,
+      pronunciation: 5,
+      confidence: 5,
+      cultural_awareness: 5,
+      reasoning: 'Grading unavailable; applied neutral fallback score.',
+      strengths: ['Completed the conversation'],
+      weaknesses: ['Detailed feedback unavailable this round'],
+    };
   }
 
   // Calculate weighted overall score

@@ -6,6 +6,10 @@ const GAMIFICATION_MIGRATION = join(
   process.cwd(),
   'db/migrations/001_initial_gamification.sql',
 )
+const QUEST_CHARACTER_MIGRATION = join(
+  process.cwd(),
+  'db/migrations/003_quest_character_association.sql',
+)
 const CORE_MIGRATION = join(process.cwd(), 'migrations/0001_initial.sql')
 
 // Create an in-memory D1-compatible DB with the gamification schema applied.
@@ -21,6 +25,15 @@ export function createGamificationDb(): D1Database {
   const sql = readFileSync(GAMIFICATION_MIGRATION, 'utf-8')
   db.exec(sql)
 
+  // Apply quest<->character association migration so `quests.character_id`
+  // exists (used by quests.list/activate joins).
+  try {
+    const questCharSql = readFileSync(QUEST_CHARACTER_MIGRATION, 'utf-8')
+    db.exec(questCharSql)
+  } catch {
+    // If migration file missing, tests will fail loudly elsewhere.
+  }
+
   // Minimal users table for auth references (not strictly required)
   try {
     const coreSql = readFileSync(CORE_MIGRATION, 'utf-8')
@@ -30,6 +43,20 @@ export function createGamificationDb(): D1Database {
   } catch {
     // ignore
   }
+
+  // Minimal sessions table with character state columns so that
+  // updateSessionCharacterState works in tests.
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS sessions (
+      token TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      active_character TEXT NOT NULL DEFAULT 'iris',
+      active_quest TEXT,
+      current_region TEXT NOT NULL DEFAULT 'berlin',
+      active_voice_id TEXT NOT NULL DEFAULT 'XB0fDUnXU5powFXDhCwa'
+    );
+  `)
 
   return wrapAsD1(db)
 }
@@ -46,6 +73,12 @@ export function seedGamification(d1: D1Database, userId = 'test-user') {
   db.prepare(
     `INSERT OR IGNORE INTO user_progress (user_id, level, xp_current, xp_to_next_level) VALUES (?, 1, 0, 100)`,
   ).run(userId)
+
+  // Insert an initial session row for this user so updateSessionCharacterState
+  // has a target to update. Use a deterministic token.
+  db.prepare(
+    `INSERT OR IGNORE INTO sessions (token, user_id, created_at) VALUES (?, ?, datetime('now'))`,
+  ).run(`session-${userId}`, userId)
 
   // 8 regions with order_index 0..7 (Berlin first)
   const regions = [
@@ -84,6 +117,19 @@ export function seedGamification(d1: D1Database, userId = 'test-user') {
   )
   for (const c of chars) {
     charStmt.run(c.id, c.name, c.age, c.region_id, c.personality, c.specialty, c.weights)
+  }
+
+  // Per spec R3 + MCP Tools, quests.list queries the `quests` table (not
+  // `characters`). Seed one narrative quest per character so tests exercise
+  // the correct join path. The quest id equals the character id for
+  // simplicity — both the new quest path and the legacy character fallback
+  // resolve the same entity.
+  const questStmt = db.prepare(
+    `INSERT INTO quests (id, name_de, name_en, description_de, description_en, category, tier_thresholds, points_reward, is_repeatable, is_hidden, character_id)
+     VALUES (?, ?, ?, ?, ?, 'achievement', '[1]', 50, 0, 0, ?)`,
+  )
+  for (const c of chars) {
+    questStmt.run(c.id, c.name, c.name, `Meet ${c.name}`, `Meet ${c.name}`, c.id)
   }
 
   // Berlin is unlocked by default (starting region)

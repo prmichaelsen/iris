@@ -31,9 +31,11 @@ export class CharacterPersonalityInjector implements PromptInjector {
     }
 
     // Build character personality prompt
-    const content = `You are ${character.name}, a ${character.age}-year-old ${character.profession_de} from ${character.region_id}.
+    const ageFragment = character.age ? `${character.age}-year-old ` : '';
+    const professionFragment = character.profession_de ? `${character.profession_de} ` : '';
+    const content = `You are ${character.name}, a ${ageFragment}${professionFragment}from ${character.region_id}.
 
-${character.personality_description}
+${character.personality}
 
 ${character.specialty ? `Your specialty: ${character.specialty}` : ''}
 

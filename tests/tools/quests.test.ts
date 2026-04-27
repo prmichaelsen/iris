@@ -31,7 +31,7 @@ describe('quests tool', () => {
         await questsTool.execute({ action: 'list', region_id: 'berlin' }, ctx),
       )
       expect(result.total).toBe(1)
-      expect(result.quests[0].region).toBe('berlin')
+      expect(result.quests[0].region_id).toBe('berlin')
     })
 
     it('marks locked-region quests unavailable', async () => {
@@ -116,9 +116,12 @@ describe('quests tool', () => {
       expect(result.quest_completed).toBe('char_berlin')
       expect(result.debrief_text).toContain('Char_Berlin')
       expect(typeof result.relationship_delta).toBe('number')
-      // Default placeholder score is 0.75 -> delta = 2
+      // With no ANTHROPIC_API_KEY set in tests, completeQuest applies the
+      // neutral 5/10 fallback per spec R17. calculateRelationshipDelta(5)
+      // returns +2 ("rough" tier), and overall_score * 10 = 50.
       expect(result.relationship_delta).toBe(2)
-      expect(result.conversation_score).toBe(75)
+      expect(result.conversation_score).toBe(50)
+      expect(result.overall_score).toBe(5)
     })
 
     it('updates relationship level by delta', async () => {

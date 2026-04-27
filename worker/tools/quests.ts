@@ -2,6 +2,10 @@
 import Anthropic from '@anthropic-ai/sdk'
 import type { ToolContext, ToolRegistration } from './shared'
 import { newId, nowSec } from './shared'
+import { calculateRelationshipDelta } from '../relationship'
+import { gradeConversation, type GradingWeights } from '../grading'
+import { getCharacter } from '../characters'
+import { updateSessionCharacterState } from '../session-state'
 
 // Valid region IDs
 const VALID_REGIONS = [
@@ -29,7 +33,14 @@ const REGION_ID_MAP: Record<string, string> = {
   switzerland: 'region_switzerland',
 }
 
-interface Character {
+// Iris is the default meta-layer character we return to on quest completion.
+const IRIS_CHARACTER_ID = 'iris'
+const IRIS_VOICE_ID = 'XB0fDUnXU5powFXDhCwa'
+
+// Max retries for Claude grading (initial + N retries = N+1 attempts)
+const GRADING_MAX_RETRIES = 1
+
+interface CharacterRow {
   id: string
   name: string
   age: number
@@ -37,19 +48,6 @@ interface Character {
   personality_description: string
   specialty: string
   grading_weights: string
-}
-
-interface Quest {
-  id: string
-  name_de: string
-  name_en: string
-  description_de: string
-  description_en: string
-  category: string
-  badge_skill: string | null
-  points_reward: number
-  is_repeatable: number
-  is_hidden: number
 }
 
 export const questsTool: ToolRegistration = {
@@ -137,30 +135,123 @@ export const questsTool: ToolRegistration = {
   },
 }
 
+/**
+ * Resolve a quest row (narrative quests have an associated character).
+ * If the given id doesn't exist in `quests`, fall back to treating the id
+ * as a character id for legacy conversational quests.
+ */
+async function resolveQuestAndCharacter(
+  ctx: ToolContext,
+  questId: string,
+): Promise<{
+  questRow: {
+    id: string
+    name_de: string
+    name_en: string
+    description_de: string
+    description_en: string
+    points_reward: number
+    character_id: string | null
+    region_id: string
+  } | null
+  character: (CharacterRow & { region_name: string; voice_unlock: string }) | null
+}> {
+  const { env } = ctx
+
+  // First, look up as a real quest
+  const quest = await env.DB
+    .prepare(
+      `SELECT q.id, q.name_de, q.name_en, q.description_de, q.description_en,
+              q.points_reward, q.character_id,
+              c.region_id as character_region_id
+       FROM quests q
+       LEFT JOIN characters c ON c.id = q.character_id
+       WHERE q.id = ?`,
+    )
+    .bind(questId)
+    .first<{
+      id: string
+      name_de: string
+      name_en: string
+      description_de: string
+      description_en: string
+      points_reward: number
+      character_id: string | null
+      character_region_id: string | null
+    }>()
+
+  let characterId: string | null = null
+  if (quest?.character_id) {
+    characterId = quest.character_id
+  } else if (!quest) {
+    // Legacy path: treat questId as characterId
+    characterId = questId
+  }
+
+  let character: (CharacterRow & { region_name: string; voice_unlock: string }) | null = null
+  if (characterId) {
+    character = await env.DB
+      .prepare(
+        `SELECT c.id, c.name, c.age, c.region_id, c.personality_description,
+                c.specialty, c.grading_weights,
+                r.name_en as region_name, r.voice_unlock
+         FROM characters c
+         JOIN regions r ON r.id = c.region_id
+         WHERE c.id = ?`,
+      )
+      .bind(characterId)
+      .first<CharacterRow & { region_name: string; voice_unlock: string }>()
+  }
+
+  return {
+    questRow: quest
+      ? {
+          id: quest.id,
+          name_de: quest.name_de,
+          name_en: quest.name_en,
+          description_de: quest.description_de,
+          description_en: quest.description_en,
+          points_reward: quest.points_reward,
+          character_id: quest.character_id,
+          region_id: quest.character_region_id || character?.region_id || '',
+        }
+      : null,
+    character,
+  }
+}
+
 async function listQuests(ctx: ToolContext, regionId?: RegionId): Promise<string> {
   const { env, userId } = ctx
 
-  // For M10: list character-based quests (conversations with characters)
-  // Each character represents a quest/conversation opportunity
+  // Query the quests table per spec (R3, MCP Tools).
+  // Tier 1 quests are always available; higher tiers are gated elsewhere.
+  // We join character + region info for narrative quests and `user_quests`
+  // for completion status.
   let query = `
     SELECT
-      c.id,
-      c.name,
-      c.age,
-      c.region_id,
-      c.personality_description,
-      c.specialty,
+      q.id,
+      q.name_de,
+      q.name_en,
+      q.description_de,
+      q.description_en,
+      q.category,
+      q.points_reward,
+      q.tier_thresholds,
+      q.character_id,
+      c.region_id as character_region_id,
+      c.name as character_name,
       r.name_en as region_name,
       CASE WHEN ur.user_id IS NOT NULL THEN 1 ELSE 0 END as region_unlocked,
-      COALESCE(ucr.relationship_level, 0) as relationship_level,
-      COALESCE(ucr.interactions_count, 0) as interactions_count
-    FROM characters c
-    JOIN regions r ON r.id = c.region_id
+      COALESCE(uq.completed, 0) as completed,
+      uq.completed_at
+    FROM quests q
+    LEFT JOIN characters c ON c.id = q.character_id
+    LEFT JOIN regions r ON r.id = c.region_id
     LEFT JOIN user_regions ur ON ur.region_id = c.region_id AND ur.user_id = ?
-    LEFT JOIN user_character_relationships ucr ON ucr.character_id = c.id AND ucr.user_id = ?
+    LEFT JOIN user_quests uq ON uq.quest_id = q.id AND uq.user_id = ?
   `
 
-  const bindings = [userId, userId]
+  const bindings: unknown[] = [userId, userId]
 
   if (regionId) {
     const fullRegionId = REGION_ID_MAP[regionId]
@@ -168,21 +259,26 @@ async function listQuests(ctx: ToolContext, regionId?: RegionId): Promise<string
     bindings.push(fullRegionId)
   }
 
-  query += ` ORDER BY r.order_index, c.name`
+  query += ` ORDER BY q.category, q.id`
 
   const { results } = await env.DB.prepare(query)
     .bind(...bindings)
     .all<{
       id: string
-      name: string
-      age: number
-      region_id: string
-      personality_description: string
-      specialty: string
-      region_name: string
+      name_de: string
+      name_en: string
+      description_de: string
+      description_en: string
+      category: string
+      points_reward: number
+      tier_thresholds: string
+      character_id: string | null
+      character_region_id: string | null
+      character_name: string | null
+      region_name: string | null
       region_unlocked: number
-      relationship_level: number
-      interactions_count: number
+      completed: number
+      completed_at: string | null
     }>()
 
   if (!results || results.length === 0) {
@@ -190,61 +286,73 @@ async function listQuests(ctx: ToolContext, regionId?: RegionId): Promise<string
       success: true,
       quests: [],
       message: regionId
-        ? `No characters found in region ${regionId}`
-        : 'No characters available',
+        ? `No quests found in region ${regionId}`
+        : 'No quests available',
     })
   }
 
-  const quests = results.map((c) => ({
-    quest_id: c.id,
-    character_name: c.name,
-    age: c.age,
-    region: c.region_id.replace('region_', ''),
-    region_name: c.region_name,
-    personality: c.personality_description,
-    specialty: c.specialty,
-    available: c.region_unlocked === 1,
-    relationship_level: c.relationship_level,
-    interactions: c.interactions_count,
-  }))
+  const quests = results.map((q) => {
+    // Parse tier thresholds to extract tier count
+    let tier = 1
+    try {
+      const thresholds = JSON.parse(q.tier_thresholds) as number[]
+      tier = thresholds.length > 0 ? 1 : 1
+    } catch {
+      // default
+    }
+
+    // A narrative quest requires its character's region to be unlocked.
+    // Non-narrative quests (skill/achievement/etc.) are always available at tier 1.
+    const hasCharacter = !!q.character_id
+    const available = hasCharacter ? q.region_unlocked === 1 : true
+
+    return {
+      quest_id: q.id,
+      name_de: q.name_de,
+      name_en: q.name_en,
+      description_de: q.description_de,
+      description_en: q.description_en,
+      category: q.category,
+      tier,
+      points_reward: q.points_reward,
+      character_id: q.character_id,
+      character_name: q.character_name,
+      region_id: q.character_region_id ? q.character_region_id.replace('region_', '') : null,
+      region_name: q.region_name,
+      available,
+      completed: q.completed === 1,
+      completed_at: q.completed_at,
+    }
+  })
 
   return JSON.stringify({
     success: true,
     quests,
     total: quests.length,
     available_count: quests.filter((q) => q.available).length,
+    completed_count: quests.filter((q) => q.completed).length,
   })
 }
 
 async function activateQuest(ctx: ToolContext, questId: string): Promise<string> {
-  const { env, userId } = ctx
+  const { env, userId, send } = ctx
 
-  // Quest ID is a character ID
-  const character = await env.DB.prepare(
-    `SELECT c.*, r.name_en as region_name, r.voice_unlock, r.id as full_region_id
-     FROM characters c
-     JOIN regions r ON r.id = c.region_id
-     WHERE c.id = ?`,
-  )
-    .bind(questId)
-    .first<
-      Character & { region_name: string; voice_unlock: string; full_region_id: string }
-    >()
+  const { questRow, character } = await resolveQuestAndCharacter(ctx, questId)
 
   if (!character) {
     return JSON.stringify({
       error: {
         code: 'NOT_FOUND',
-        message: `Character/quest ${questId} not found`,
+        message: `Quest/character ${questId} not found`,
       },
     })
   }
 
-  // Check if region is unlocked
+  // Check if the character's region is unlocked
   const regionUnlocked = await env.DB.prepare(
     `SELECT unlocked_at FROM user_regions WHERE user_id = ? AND region_id = ?`,
   )
-    .bind(userId, character.full_region_id)
+    .bind(userId, character.region_id)
     .first<{ unlocked_at: string }>()
 
   if (!regionUnlocked) {
@@ -277,18 +385,34 @@ async function activateQuest(ctx: ToolContext, questId: string): Promise<string>
     .bind(userId, character.id)
     .run()
 
-  // TODO M10: Update session state atomically
-  // - active_character: character.id
-  // - active_quest: questId
-  // - current_region: character.region_id
-  // - active_voice_id: character.voice_unlock
+  // Prefer the code-defined character's voice_id when available (spec R18a):
+  // the ElevenLabs voice used must match the character, not the region.
+  const codeCharacter = getCharacter(character.id)
+  const activeVoiceId = codeCharacter?.voice_id || character.voice_unlock
+
+  // Persist session state atomically
+  await updateSessionCharacterState(env.DB, userId, {
+    active_character: character.id,
+    active_quest: questRow?.id ?? questId,
+    current_region: character.region_id,
+    active_voice_id: activeVoiceId,
+  })
+
+  // Notify WS client so handler can refresh local vars and UI
+  send({
+    type: 'character_state',
+    character_id: character.id,
+    voice_id: activeVoiceId,
+    quest_id: questRow?.id ?? questId,
+    region: character.region_id.replace('region_', ''),
+  })
 
   // Parse grading weights
   let gradingWeights: Record<string, number> = {}
   try {
     gradingWeights = JSON.parse(character.grading_weights)
-  } catch (e) {
-    // Use defaults if parsing fails
+  } catch {
+    // Use empty object if parsing fails
   }
 
   // Generate intro text in character voice
@@ -308,7 +432,7 @@ Sag Hallo!`
 
   return JSON.stringify({
     success: true,
-    quest_activated: questId,
+    quest_activated: questRow?.id ?? questId,
     character: {
       id: character.id,
       name: character.name,
@@ -316,7 +440,7 @@ Sag Hallo!`
       region: character.region_id.replace('region_', ''),
       personality: character.personality_description,
       specialty: character.specialty,
-      voice_id: character.voice_unlock,
+      voice_id: activeVoiceId,
     },
     interaction_id: interactionId,
     intro_text: introText,
@@ -327,23 +451,15 @@ Sag Hallo!`
 }
 
 async function completeQuest(ctx: ToolContext, questId: string): Promise<string> {
-  const { env, userId } = ctx
+  const { env, userId, send, conversationHistory } = ctx
 
-  // Quest ID is a character ID
-  const character = await env.DB.prepare(
-    `SELECT c.name, c.region_id, r.name_en as region_name
-     FROM characters c
-     JOIN regions r ON r.id = c.region_id
-     WHERE c.id = ?`,
-  )
-    .bind(questId)
-    .first<{ name: string; region_id: string; region_name: string }>()
+  const { questRow, character } = await resolveQuestAndCharacter(ctx, questId)
 
   if (!character) {
     return JSON.stringify({
       error: {
         code: 'NOT_FOUND',
-        message: `Character/quest ${questId} not found`,
+        message: `Quest/character ${questId} not found`,
       },
     })
   }
@@ -356,7 +472,7 @@ async function completeQuest(ctx: ToolContext, questId: string): Promise<string>
      ORDER BY created_at DESC
      LIMIT 1`,
   )
-    .bind(userId, questId)
+    .bind(userId, character.id)
     .first<{ id: string; created_at: number; score: number | null; metadata: string | null }>()
 
   if (!interaction) {
@@ -368,49 +484,120 @@ async function completeQuest(ctx: ToolContext, questId: string): Promise<string>
     })
   }
 
-  // TODO M10: Implement conversation grading
-  // For now, use a placeholder score
-  const conversationScore = interaction.score ?? 0.75
-
-  // Calculate relationship delta based on score
-  let relationshipDelta = 0
-  if (conversationScore >= 0.9) {
-    relationshipDelta = 3
-  } else if (conversationScore >= 0.75) {
-    relationshipDelta = 2
-  } else if (conversationScore >= 0.6) {
-    relationshipDelta = 1
-  } else if (conversationScore < 0.4) {
-    relationshipDelta = -1
+  // Parse grading weights (default to balanced if malformed)
+  let rawWeights: Record<string, number>
+  try {
+    rawWeights = JSON.parse(character.grading_weights || '{}')
+  } catch {
+    rawWeights = {}
+  }
+  const weights: GradingWeights = {
+    comprehension: rawWeights.comprehension ?? 0.15,
+    fluency: rawWeights.fluency ?? 0.15,
+    grammar: rawWeights.grammar ?? 0.15,
+    vocabulary: rawWeights.vocabulary ?? 0.15,
+    pronunciation: rawWeights.pronunciation ?? 0.15,
+    confidence: rawWeights.confidence ?? 0.10,
+    cultural_awareness: rawWeights.cultural_awareness ?? 0.15,
   }
 
-  // Update relationship
+  // Grade the conversation via Claude (with retry + neutral fallback)
+  let overallScore = 5
+  let strengths: string[] = []
+  let weaknesses: string[] = []
+  let reasoning = 'Grading unavailable.'
+
+  if (env.ANTHROPIC_API_KEY) {
+    const anthropic = new Anthropic({ apiKey: env.ANTHROPIC_API_KEY })
+    const messages: Anthropic.MessageParam[] = conversationHistory ?? []
+
+    let graded = false
+    for (let attempt = 0; attempt <= GRADING_MAX_RETRIES; attempt++) {
+      try {
+        const grade = await gradeConversation(
+          anthropic,
+          messages,
+          character.name,
+          character.specialty,
+          character.personality_description,
+          weights,
+        )
+        overallScore = grade.overall_score
+        strengths = grade.strengths
+        weaknesses = grade.weaknesses
+        reasoning = grade.reasoning
+        graded = true
+        break
+      } catch (err) {
+        console.error(
+          `[quests.complete] grading attempt ${attempt + 1} failed:`,
+          err instanceof Error ? err.message : err,
+        )
+      }
+    }
+
+    if (!graded) {
+      // Neutral fallback per spec R17: 5/10 across all metrics
+      overallScore = 5
+      strengths = ['Completed the conversation']
+      weaknesses = ['Detailed feedback unavailable this round']
+      reasoning = 'Grading service unavailable; applied neutral fallback.'
+    }
+  }
+
+  // Map overall score (0-10) to relationship delta per spec R16
+  const deltaInfo = calculateRelationshipDelta(overallScore)
+  const relationshipDelta = deltaInfo.delta
+
+  // Update relationship with clamping (0-100)
   if (relationshipDelta !== 0) {
     await env.DB.prepare(
       `UPDATE user_character_relationships
-       SET relationship_level = relationship_level + ?
+       SET relationship_level = MAX(0, MIN(100, relationship_level + ?))
        WHERE user_id = ? AND character_id = ?`,
     )
-      .bind(relationshipDelta, userId, questId)
+      .bind(relationshipDelta, userId, character.id)
       .run()
   }
 
-  // Update interaction with final score
+  // Update interaction with final score (0-10 canonical scale)
   await env.DB.prepare(
     `UPDATE character_interactions
      SET score = ?
      WHERE id = ?`,
   )
-    .bind(conversationScore, interaction.id)
+    .bind(overallScore, interaction.id)
     .run()
 
-  // TODO M10: Clear quest state, switch back to Iris
-  // - active_character: 'iris'
-  // - active_quest: null
-  // - active_voice_id: 'iris_voice'
-  // - Keep current_region (user stays in the region)
+  // Mark user_quests complete for narrative quests
+  if (questRow) {
+    await env.DB
+      .prepare(
+        `INSERT INTO user_quests (id, user_id, quest_id, progress, completed, completed_at)
+         VALUES (?, ?, ?, 100, 1, datetime('now'))
+         ON CONFLICT DO NOTHING`,
+      )
+      .bind(newId(), userId, questRow.id)
+      .run()
+      .catch((err) => console.warn('[quests.complete] user_quests upsert failed:', err))
+  }
 
-  // Generate Iris debrief text
+  // Switch session state back to Iris (keep current_region)
+  await updateSessionCharacterState(env.DB, userId, {
+    active_character: IRIS_CHARACTER_ID,
+    active_quest: null,
+    active_voice_id: IRIS_VOICE_ID,
+  })
+
+  // Notify client of the switch back to Iris
+  send({
+    type: 'character_state',
+    character_id: IRIS_CHARACTER_ID,
+    voice_id: IRIS_VOICE_ID,
+    quest_id: null,
+    region: character.region_id.replace('region_', ''),
+  })
+
   const relationshipChangeText =
     relationshipDelta > 0
       ? `Deine Beziehung zu ${character.name} hat sich um ${relationshipDelta} Punkt${relationshipDelta > 1 ? 'e' : ''} verbessert!`
@@ -418,27 +605,35 @@ async function completeQuest(ctx: ToolContext, questId: string): Promise<string>
         ? `Deine Beziehung zu ${character.name} hat sich um ${Math.abs(relationshipDelta)} Punkt${Math.abs(relationshipDelta) > 1 ? 'e' : ''} verschlechtert.`
         : 'Deine Beziehung ist unverändert geblieben.'
 
+  const strengthsText =
+    strengths.length > 0 ? `Stärken: ${strengths.join('; ')}.` : ''
+  const weaknessesText =
+    weaknesses.length > 0 ? `Zum Üben: ${weaknesses.join('; ')}.` : ''
+
   const debriefText = `Iris: Wie war dein Gespräch mit ${character.name}?
 
-Gesprächswertung: ${Math.round(conversationScore * 100)}%
+Gesamtbewertung: ${overallScore.toFixed(1)}/10 (${deltaInfo.tier}).
 ${relationshipChangeText}
 
-${
-  conversationScore >= 0.8
-    ? 'Hervorragend gemacht! Du hast wirklich eine Verbindung hergestellt.'
-    : conversationScore >= 0.6
-      ? 'Gut! Es gibt noch Raum für Verbesserungen, aber du machst Fortschritte.'
-      : 'Das war eine Herausforderung. Lass uns gemeinsam überlegen, was du beim nächsten Mal anders machen könntest.'
-}
+${strengthsText}
+${weaknessesText}
 
 Möchtest du über das Gespräch sprechen, oder sollen wir weitermachen?`
 
   return JSON.stringify({
     success: true,
-    quest_completed: questId,
+    quest_completed: questRow?.id ?? questId,
     character_name: character.name,
-    conversation_score: Math.round(conversationScore * 100),
+    conversation_score: Math.round(overallScore * 10),
+    overall_score: overallScore,
     relationship_delta: relationshipDelta,
+    relationship_tier: deltaInfo.tier,
+    grading: {
+      overall_score: overallScore,
+      strengths,
+      weaknesses,
+      reasoning,
+    },
     debrief_text: debriefText,
     instructions:
       'Session state cleared. Returned to Iris. User can now reflect on conversation or continue.',
@@ -448,39 +643,36 @@ Möchtest du über das Gespräch sprechen, oder sollen wir weitermachen?`
 async function getQuestDetails(ctx: ToolContext, questId: string): Promise<string> {
   const { env, userId } = ctx
 
-  // Quest ID is a character ID
-  const character = await env.DB.prepare(
-    `SELECT c.*, r.name_en as region_name, r.voice_unlock,
-       CASE WHEN ur.user_id IS NOT NULL THEN 1 ELSE 0 END as region_unlocked,
-       COALESCE(ucr.relationship_level, 0) as relationship_level,
-       COALESCE(ucr.interactions_count, 0) as interactions_count,
-       ucr.last_interaction_at
-     FROM characters c
-     JOIN regions r ON r.id = c.region_id
-     LEFT JOIN user_regions ur ON ur.region_id = c.region_id AND ur.user_id = ?
-     LEFT JOIN user_character_relationships ucr ON ucr.character_id = c.id AND ucr.user_id = ?
-     WHERE c.id = ?`,
-  )
-    .bind(userId, userId, questId)
-    .first<
-      Character & {
-        region_name: string
-        voice_unlock: string
-        region_unlocked: number
-        relationship_level: number
-        interactions_count: number
-        last_interaction_at: string | null
-      }
-    >()
+  const { questRow, character } = await resolveQuestAndCharacter(ctx, questId)
 
   if (!character) {
     return JSON.stringify({
       error: {
         code: 'NOT_FOUND',
-        message: `Character/quest ${questId} not found`,
+        message: `Quest/character ${questId} not found`,
       },
     })
   }
+
+  // Check region unlocked + load relationship
+  const statusRow = await env.DB.prepare(
+    `SELECT
+       CASE WHEN ur.user_id IS NOT NULL THEN 1 ELSE 0 END as region_unlocked,
+       COALESCE(ucr.relationship_level, 0) as relationship_level,
+       COALESCE(ucr.interactions_count, 0) as interactions_count,
+       ucr.last_interaction_at
+     FROM characters c
+     LEFT JOIN user_regions ur ON ur.region_id = c.region_id AND ur.user_id = ?
+     LEFT JOIN user_character_relationships ucr ON ucr.character_id = c.id AND ucr.user_id = ?
+     WHERE c.id = ?`,
+  )
+    .bind(userId, userId, character.id)
+    .first<{
+      region_unlocked: number
+      relationship_level: number
+      interactions_count: number
+      last_interaction_at: string | null
+    }>()
 
   // Get interaction history
   const { results: history } = await env.DB.prepare(
@@ -490,24 +682,27 @@ async function getQuestDetails(ctx: ToolContext, questId: string): Promise<strin
      ORDER BY created_at DESC
      LIMIT 10`,
   )
-    .bind(userId, questId)
+    .bind(userId, character.id)
     .all<{ interaction_type: string; score: number | null; created_at: number }>()
 
   return JSON.stringify({
     success: true,
     quest: {
-      quest_id: character.id,
+      quest_id: questRow?.id ?? character.id,
+      name_de: questRow?.name_de ?? character.name,
+      name_en: questRow?.name_en ?? character.name,
+      character_id: character.id,
       character_name: character.name,
       age: character.age,
       region: character.region_id.replace('region_', ''),
       region_name: character.region_name,
       personality: character.personality_description,
       specialty: character.specialty,
-      voice_id: character.voice_unlock,
-      available: character.region_unlocked === 1,
-      relationship_level: character.relationship_level,
-      interactions_count: character.interactions_count,
-      last_interaction: character.last_interaction_at,
+      voice_id: getCharacter(character.id)?.voice_id || character.voice_unlock,
+      available: (statusRow?.region_unlocked ?? 0) === 1,
+      relationship_level: statusRow?.relationship_level ?? 0,
+      interactions_count: statusRow?.interactions_count ?? 0,
+      last_interaction: statusRow?.last_interaction_at ?? null,
     },
     history: history || [],
   })
