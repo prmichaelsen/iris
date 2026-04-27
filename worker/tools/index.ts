@@ -7,6 +7,7 @@ import { genderPickTool } from './gender-pick'
 import { definitionTool } from './definition'
 import { fillBlankTool } from './fill-blank'
 import { setContextTool, viewProgressTool, debugStateTool } from './gamification'
+import { questsTool } from './quests'
 
 const TOOL_REGISTRY: ToolRegistration[] = [
   flashcardMatchingTool,
@@ -16,6 +17,7 @@ const TOOL_REGISTRY: ToolRegistration[] = [
   setContextTool,
   viewProgressTool,
   debugStateTool,
+  questsTool,
 ]
 
 export function getTools(targetLang: { code: string } | null): Anthropic.Tool[] {
