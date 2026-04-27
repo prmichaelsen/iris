@@ -4,11 +4,11 @@ import { join } from 'node:path'
 
 const GAMIFICATION_MIGRATION = join(
   process.cwd(),
-  'db/migrations/001_initial_gamification.sql',
+  'migrations/0008_initial_gamification.sql',
 )
 const QUEST_CHARACTER_MIGRATION = join(
   process.cwd(),
-  'db/migrations/003_quest_character_association.sql',
+  'migrations/0010_quest_character_association.sql',
 )
 const CORE_MIGRATION = join(process.cwd(), 'migrations/0001_initial.sql')
 
