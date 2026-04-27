@@ -38,13 +38,22 @@ export function FlashcardFreeformActive({ widget, onSubmit }: ActiveProps) {
           autoFocus
         />
       </div>
-      <button
-        className="fcf-submit"
-        onClick={handleSubmit}
-        disabled={submitted || !answer.trim()}
-      >
-        {submitted ? 'Grading...' : 'Submit'}
-      </button>
+      <div className="fcf-buttons">
+        <button
+          className="fcf-pass"
+          onClick={() => { setSubmitted(true); onSubmit('') }}
+          disabled={submitted}
+        >
+          pass
+        </button>
+        <button
+          className="fcf-submit"
+          onClick={handleSubmit}
+          disabled={submitted || !answer.trim()}
+        >
+          {submitted ? 'Grading...' : 'Submit'}
+        </button>
+      </div>
     </div>
   )
 }
