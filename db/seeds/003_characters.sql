@@ -54,14 +54,14 @@ INSERT INTO characters (id, name, age, region_id, personality_description, speci
     '{"vocabulary": 0.20, "comprehension": 0.25, "grammar": 0.20, "cultural_awareness": 0.15, "fluency": 0.10, "confidence": 0.10}'
   ),
   (
-    'char_karl',
-    'Karl',
-    44,
-    'region_saxony',
-    'Historian and former East German, reflective about reunification history',
-    'Historical/Political Vocabulary',
-    '{"tier": 2, "subquest": "karl_history_walk"}',
-    '{"vocabulary": 0.25, "cultural_awareness": 0.20, "comprehension": 0.20, "grammar": 0.15, "fluency": 0.10, "confidence": 0.10}'
+    'char_karl_baker',
+    'Karl der Bäcker',
+    58,
+    'region_berlin',
+    'Impatient, no-nonsense Berlin baker who speaks fast and expects you to keep up. Gets annoyed if you take too long to order. Classic Berlin directness with zero patience for dithering.',
+    'Speed & Impatience',
+    '{"tier": 1, "subquest": null}',
+    '{"comprehension": 0.20, "fluency": 0.25, "grammar": 0.10, "vocabulary": 0.15, "pronunciation": 0.10, "confidence": 0.15, "cultural_awareness": 0.05}'
   ),
   (
     'char_anna',

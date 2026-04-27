@@ -10,7 +10,10 @@ export interface PromptInjectorContext {
   /** User ID for fetching user-specific data */
   userId: string;
 
-  /** Current character ID (e.g., 'iris', 'karl', 'mila') */
+  /** Database connection for querying quest/character data */
+  db: D1Database;
+
+  /** Current character ID (e.g., 'iris', 'char_karl_baker', 'mila') */
   activeCharacterId: string;
 
   /** Active quest ID if in quest mode */
