@@ -177,7 +177,7 @@ async function pickNouns(
        FROM vocab_items v
        LEFT JOIN user_vocab_progress p ON p.vocab_item_id = v.id AND p.user_id = ?
        WHERE v.language = ?
-         AND v.part_of_speech = 'noun'
+         AND v.pos = 'noun'
          AND v.article IS NOT NULL
          ${cefrFilter}
        ORDER BY

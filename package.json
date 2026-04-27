@@ -12,6 +12,8 @@
     "preview": "vite preview",
     "deploy": "vite build && wrangler deploy",
     "secrets:put": "wrangler secret put ANTHROPIC_API_KEY && wrangler secret put ELEVENLABS_API_KEY",
+    "test": "vitest run",
+    "test:watch": "vitest",
     "seed:goethe": "tsx scripts/seed/goethe.ts",
     "seed:tatoeba": "tsx scripts/seed/tatoeba.ts"
   },
@@ -25,6 +27,7 @@
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20260426.1",
+    "@types/better-sqlite3": "^7.6.13",
     "@types/express": "^5.0.0",
     "@types/node": "^22.10.2",
     "@types/react": "^18.3.18",
@@ -32,7 +35,9 @@
     "@types/ws": "^8.5.13",
     "@vitejs/plugin-basic-ssl": "^2.3.0",
     "@vitejs/plugin-react": "^4.3.4",
+    "better-sqlite3": "^12.9.0",
     "concurrently": "^9.1.0",
+    "miniflare": "^4.20260424.0",
     "tsx": "^4.19.2",
     "typescript": "^5.7.2",
     "vite": "^6.0.5",
