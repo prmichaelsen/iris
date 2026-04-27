@@ -18,6 +18,15 @@ import {
 } from './auth'
 import { getTools, executeToolCall, pickVocab, newId, nowSec, type Env, type PendingWidget } from './tools'
 import { sanitizeToolMessages } from './sanitize-tool-messages'
+import {
+  getOrCreateConversationState,
+  incrementStrike,
+  recordUserResponse,
+  clearConversationState,
+  characterUsesTimer,
+  getCharacterTimerConfig,
+  type ConversationState,
+} from './conversation-state'
 
 const ELEVEN_API = 'https://api.elevenlabs.io/v1'
 const MODEL = 'claude-opus-4-7'
@@ -331,6 +340,24 @@ async function handleWebSocket(request: Request, env: Env): Promise<Response> {
     }),
   )
 
+  // Find or create the user's active conversation, then load history from D1.
+  const conversationId = await getOrCreateActiveConversation(env.DB, userId)
+
+  // Initialize conversation state for strike tracking
+  const conversationState = getOrCreateConversationState(conversationId, activeCharacterId, activeQuest || undefined)
+
+  // Send timer config to client if this character uses timers
+  const timerDuration = getCharacterTimerConfig(activeCharacterId)
+  if (timerDuration !== null) {
+    server.send(
+      JSON.stringify({
+        type: 'timer_config',
+        enabled: true,
+        duration_ms: timerDuration,
+      }),
+    )
+  }
+
   // Pending widget state — at most one widget active per connection.
   // When a widget is pending, the promise resolves with the user's answers
   // or rejects on timeout/cancel.
@@ -342,8 +369,7 @@ async function handleWebSocket(request: Request, env: Env): Promise<Response> {
     correctMap: Map<string, { correct_index: number; correct_answer: string; word: string }>
   } = { widgetId: null, resolve: null, reject: null, timer: null, correctMap: new Map() }
 
-  // Find or create the user's active conversation, then load history from D1.
-  const conversationId = await getOrCreateActiveConversation(env.DB, userId)
+  // Load history from D1
   const history: Anthropic.MessageParam[] = await loadHistory(env.DB, conversationId)
   console.log(`[iris] loaded ${history.length} prior messages for conversation ${conversationId}`)
 
@@ -385,6 +411,54 @@ async function handleWebSocket(request: Request, env: Env): Promise<Response> {
             .prepare('DELETE FROM messages WHERE conversation_id = ?')
             .bind(conversationId)
             .run()
+          // Clear conversation state on reset
+          clearConversationState(conversationId)
+        } else if (msg.type === 'timeout') {
+          // User failed to respond in time (client-side timeout detection)
+          const state = incrementStrike(conversationId)
+          if (!state) return
+
+          console.log(`[iris] timeout strike ${state.strikes}/${state.maxStrikes} for conversation ${conversationId}`)
+
+          // Notify client of strike count
+          send({ type: 'strike', strikes: state.strikes, max_strikes: state.maxStrikes })
+
+          if (state.strikes >= state.maxStrikes) {
+            // Quest failed — inject failure message into history
+            // Karl will say "NÄCHSTER!" via the quest conditions prompt
+            const failureMessage = 'The user did not respond in time. This is strike 3.'
+            history.push({ role: 'user', content: failureMessage })
+            await persistMessage(env.DB, conversationId, 'user', failureMessage, 'system')
+
+            // Trigger assistant response (Karl will say NÄCHSTER!)
+            const vocab = targetLang ? await pickVocab(env.DB, userId, targetLang.code, 5) : []
+            const tools = getTools(targetLang)
+            const stream = anthropic.messages.stream({
+              model: MODEL,
+              max_tokens: 512,
+              system: buildSystemPrompt(targetLang, vocab, activeCharacter),
+              messages: sanitizeToolMessages(history),
+              ...(tools.length > 0 ? { tools } : {}),
+            })
+
+            let failureText = ''
+            stream.on('text', (delta) => {
+              failureText += delta
+              send({ type: 'response_text', delta })
+            })
+
+            await stream.finalMessage()
+
+            if (failureText.trim()) {
+              history.push({ role: 'assistant', content: failureText })
+              await persistMessage(env.DB, conversationId, 'assistant', failureText, activeCharacterId)
+              await streamTTS(failureText, server, env, activeVoiceId)
+            }
+
+            send({ type: 'quest_failed', reason: 'timeout', strikes: state.strikes })
+            send({ type: 'done' })
+          }
+          return
         } else if (msg.type === 'widget_response' && pendingWidget.widgetId === msg.widget_id && pendingWidget.resolve) {
           if (pendingWidget.timer) clearTimeout(pendingWidget.timer)
           // Handle both array answers (matching/gender-pick) and single answer (freeform)
@@ -501,6 +575,14 @@ async function handleWebSocket(request: Request, env: Env): Promise<Response> {
       history.push({ role: 'user', content: transcript })
       await persistMessage(env.DB, conversationId, 'user', transcript, 'user')
 
+      // Record user response timestamp (reset timer, strikes NOT reset per quest rules)
+      recordUserResponse(conversationId)
+
+      // Stop timer on user response
+      if (characterUsesTimer(activeCharacterId)) {
+        send({ type: 'timer_stop' })
+      }
+
       // Pick vocabulary cards for this turn — injected into the system prompt
       const vocab = targetLang
         ? await pickVocab(env.DB, userId, targetLang.code, 5)
@@ -591,6 +673,11 @@ async function handleWebSocket(request: Request, env: Env): Promise<Response> {
       // TTS the text response (skip if the turn was pure tool calls with no text)
       if (fullAssistantText.trim()) {
         await streamTTS(fullAssistantText, server, env, activeVoiceId)
+      }
+
+      // If this character uses timer pressure, signal client to start countdown
+      if (characterUsesTimer(activeCharacterId)) {
+        send({ type: 'timer_start' })
       }
 
       // Mark vocab as seen
