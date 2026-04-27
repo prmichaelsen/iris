@@ -12,7 +12,8 @@
     "preview": "vite preview",
     "deploy": "vite build && wrangler deploy",
     "secrets:put": "wrangler secret put ANTHROPIC_API_KEY && wrangler secret put ELEVENLABS_API_KEY",
-    "seed:goethe": "tsx scripts/seed/goethe.ts"
+    "seed:goethe": "tsx scripts/seed/goethe.ts",
+    "seed:tatoeba": "tsx scripts/seed/tatoeba.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.91.0",

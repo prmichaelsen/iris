@@ -53,3 +53,6 @@ coverage/
 
 # Generated runtime cache (prefix audio, etc.)
 data/
+
+# Generated seed migrations (reproducible via scripts/seed/*.ts)
+migrations/0005_seed_tatoeba_*.sql
