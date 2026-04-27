@@ -32,10 +32,10 @@ milestones:
 
   - id: M4
     title: Interactive Widgets (Flashcard-Matching MVP)
-    status: in_progress
+    status: complete
     file: agent/milestones/milestone-4-interactive-widgets.md
     tasks_total: 8
-    tasks_complete: 0
+    tasks_complete: 8
 
   - id: M5
     title: Extended Exercises
@@ -118,73 +118,73 @@ tasks:
   milestone_4:
     - id: 1
       title: Define Shared Widget Types
-      status: pending
+      status: complete
       file: agent/tasks/milestone-4-interactive-widgets/task-1-widget-types.md
       estimated_hours: 1
-      started: null
-      actual_hours: null
+      started: 2026-04-27
+      actual_hours: 1
 
     - id: 2
       title: Tool-Use Streaming Loop in Worker
-      status: pending
+      status: complete
       file: agent/tasks/milestone-4-interactive-widgets/task-2-tool-use-loop.md
       estimated_hours: 2.5
-      started: null
-      actual_hours: null
+      started: 2026-04-27
+      actual_hours: 2.5
       depends_on: [1]
 
     - id: 3
       title: Server-Side Flashcard Generation
-      status: pending
+      status: complete
       file: agent/tasks/milestone-4-interactive-widgets/task-3-flashcard-generation.md
       estimated_hours: 2
-      started: null
-      actual_hours: null
+      started: 2026-04-27
+      actual_hours: 2
       depends_on: [1, 2]
 
     - id: 4
       title: WebSocket Protocol Extensions
-      status: pending
+      status: complete
       file: agent/tasks/milestone-4-interactive-widgets/task-4-ws-protocol.md
       estimated_hours: 1
-      started: null
-      actual_hours: null
+      started: 2026-04-27
+      actual_hours: 1
       depends_on: [1]
 
     - id: 5
       title: Server-Side Grading + SM-2 Update
-      status: pending
+      status: complete
       file: agent/tasks/milestone-4-interactive-widgets/task-5-grading-sm2.md
       estimated_hours: 1.5
-      started: null
-      actual_hours: null
+      started: 2026-04-27
+      actual_hours: 1.5
       depends_on: [3]
 
     - id: 6
       title: Widget Persistence in D1
-      status: pending
+      status: complete
       file: agent/tasks/milestone-4-interactive-widgets/task-6-widget-persistence.md
       estimated_hours: 1.5
-      started: null
-      actual_hours: null
+      started: 2026-04-27
+      actual_hours: 1.5
       depends_on: [5]
 
     - id: 7
       title: FlashcardWidget Client Component
-      status: pending
+      status: complete
       file: agent/tasks/milestone-4-interactive-widgets/task-7-flashcard-ui.md
       estimated_hours: 2.5
-      started: null
-      actual_hours: null
+      started: 2026-04-27
+      actual_hours: 2.5
       depends_on: [1, 4]
 
     - id: 8
       title: Integration Testing & Deploy
-      status: pending
+      status: complete
       file: agent/tasks/milestone-4-interactive-widgets/task-8-integration-deploy.md
       estimated_hours: 1.5
-      started: null
-      actual_hours: null
+      started: 2026-04-27
+      actual_hours: 1.5
       depends_on: [2, 3, 4, 5, 6, 7]
 
   milestone_9:
