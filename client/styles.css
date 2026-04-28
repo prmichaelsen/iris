@@ -1501,10 +1501,6 @@ footer {
 }
 
 .word-popover {
-  position: absolute;
-  bottom: calc(100% + 6px);
-  left: 50%;
-  transform: translateX(-50%);
   min-width: 180px;
   max-width: 320px;
   padding: 10px 12px;
@@ -1514,7 +1510,7 @@ footer {
   box-shadow: var(--popover-shadow);
   font-size: 0.85rem;
   line-height: 1.35;
-  z-index: 200;
+  z-index: 1000;
   white-space: normal;
   text-align: left;
   border: 1px solid var(--popover-border);
@@ -1522,12 +1518,17 @@ footer {
 .word-popover::after {
   content: '';
   position: absolute;
-  top: 100%;
-  left: 50%;
-  margin-left: -6px;
+  left: var(--arrow-left, 50%);
   border-width: 6px;
   border-style: solid;
+}
+.word-popover-above::after {
+  top: 100%;
   border-color: var(--popover-bg) transparent transparent transparent;
+}
+.word-popover-below::after {
+  bottom: 100%;
+  border-color: transparent transparent var(--popover-bg) transparent;
 }
 
 .word-popover-header {
