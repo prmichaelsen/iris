@@ -102,6 +102,22 @@ export default function App({ user, signOut }: AppProps) {
     })
   }, [])
 
+  // Drive scroll on every streamed token, not just on layout settle.
+  // `totalListHeightChanged` fires AFTER the new line paints, leaving the
+  // tail of the message under the fold for one frame and producing visible
+  // jank during fast streams. Both memorycloud.chat and agentbase.me
+  // schedule a scroll synchronously with the partial-text state change for
+  // this reason — the manual scroll lands the same frame as the new layout.
+  useEffect(() => {
+    if (!partial) return
+    if (!atBottomRef.current) return
+    virtuosoRef.current?.scrollToIndex({
+      index: 'LAST',
+      align: 'end',
+      behavior: 'auto',
+    })
+  }, [partial])
+
   useEffect(() => {
     let active = true
     let attempts = 0
@@ -700,9 +716,6 @@ export default function App({ user, signOut }: AppProps) {
       </div>
 
       <footer>
-        {liveActive && liveCaption && (
-          <div className="live-caption" aria-live="polite">{liveCaption}</div>
-        )}
         {liveActive ? (
           <button
             className="mic mic-live"

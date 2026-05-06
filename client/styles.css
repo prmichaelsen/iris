@@ -247,16 +247,6 @@ footer {
   color: white;
 }
 
-.live-caption {
-  flex-basis: 100%;
-  text-align: center;
-  font-size: 0.95rem;
-  color: var(--muted);
-  font-style: italic;
-  padding: 0.25rem 0.75rem;
-  margin-bottom: 0.25rem;
-}
-
 .lang-bar {
   display: flex;
   align-items: center;

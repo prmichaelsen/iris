@@ -2,6 +2,12 @@
 
 All notable changes to Iris are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versioning follows [SemVer](https://semver.org/).
 
+## [0.11.1] - 2026-05-06
+
+### Fixed
+- **Streaming-scroll jank.** Previously the chat list relied solely on Virtuoso's `totalListHeightChanged` to follow assistant-text streaming. That callback only fires after layout settles, leaving the tail of each new line under the fold for one frame and producing a visible step on every token. Added a `useEffect` keyed on `partial` that scrolls to the last item synchronously with each token update — same recipe used by `memorycloud.chat` and `agentbase.me`. `totalListHeightChanged` is left in place to catch height changes from non-streaming sources (e.g. lazy-loaded media).
+- **Live partial-transcript caption was eating the end-call button.** The footer caption was rendered with `flex-basis: 100%` inside a non-wrapping flex row, which made it fight the mic button for the same row instead of stacking above it. Removed from the footer entirely; the `liveCaption` state stays wired so a future "show partial inside the user's forming chat bubble" is a small follow-up.
+
 ## [0.11.0] - 2026-05-06
 
 ### Added
