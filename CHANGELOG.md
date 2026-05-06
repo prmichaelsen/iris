@@ -2,6 +2,11 @@
 
 All notable changes to Iris are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versioning follows [SemVer](https://semver.org/).
 
+## [0.11.2] - 2026-05-06
+
+### Fixed
+- **Streaming-scroll still drifting up despite 0.11.1 fix.** The per-token `useEffect` was firing in time with the partial-text state change, but `scrollToIndex` ran in the same React commit as the `setPartial` that triggered it — before Virtuoso had a chance to re-measure the synthetic partial item's new height. Result: scroll target was computed against the previous height and consistently fell short by however many pixels the new tokens added, so the message visibly drifted up out of the viewport one chunk at a time. Wrapped the `scrollToIndex` call in `requestAnimationFrame` so it lands the frame after Virtuoso's `ResizeObserver` re-measures. Tracked alongside `totalListHeightChanged` for redundancy.
+
 ## [0.11.1] - 2026-05-06
 
 ### Fixed

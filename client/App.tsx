@@ -105,17 +105,24 @@ export default function App({ user, signOut }: AppProps) {
   // Drive scroll on every streamed token, not just on layout settle.
   // `totalListHeightChanged` fires AFTER the new line paints, leaving the
   // tail of the message under the fold for one frame and producing visible
-  // jank during fast streams. Both memorycloud.chat and agentbase.me
-  // schedule a scroll synchronously with the partial-text state change for
-  // this reason — the manual scroll lands the same frame as the new layout.
+  // jank during fast streams.
+  //
+  // The RAF defers the scroll to the next frame so Virtuoso has a chance
+  // to re-measure the partial item's new height. Without it, scrollToIndex
+  // computes against the previous height and lands short of the new
+  // bottom — visible as the chat appearing to "drift up" each token even
+  // though we're nominally pinned to the bottom.
   useEffect(() => {
     if (!partial) return
     if (!atBottomRef.current) return
-    virtuosoRef.current?.scrollToIndex({
-      index: 'LAST',
-      align: 'end',
-      behavior: 'auto',
+    const id = requestAnimationFrame(() => {
+      virtuosoRef.current?.scrollToIndex({
+        index: 'LAST',
+        align: 'end',
+        behavior: 'auto',
+      })
     })
+    return () => cancelAnimationFrame(id)
   }, [partial])
 
   useEffect(() => {
