@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Virtuoso, type VirtuosoHandle } from 'react-virtuoso'
-import { Recorder, StreamingPlayer, playBlob, unlockAudioPlayback, stopActivePlayback, type PlaybackHandle } from './audio'
+import { Recorder, LiveRecorder, StreamingPlayer, playBlob, unlockAudioPlayback, stopActivePlayback, type PlaybackHandle } from './audio'
 import { FlashcardActive, FlashcardResult } from './FlashcardWidget'
 import { FlashcardFreeformActive, FlashcardFreeformResult } from './widgets/FlashcardFreeform'
 import { GenderPickActive, GenderPickResult } from './widgets/GenderPick'
@@ -70,8 +70,24 @@ export default function App({ user, signOut }: AppProps) {
 
   const wsRef = useRef<WebSocket | null>(null)
   const recorderRef = useRef(new Recorder())
+  const liveRecorderRef = useRef(new LiveRecorder())
   const playerRef = useRef(new StreamingPlayer())
   const partialRef = useRef('')
+
+  // Live mode ("voice call"): mic stays open, server-side VAD endpoints
+  // utterances. Independent of `status` — status still tracks the
+  // thinking/speaking turn lifecycle.
+  const [liveActive, setLiveActive] = useState(false)
+  const [liveStarting, setLiveStarting] = useState(false)
+  const [liveCaption, setLiveCaption] = useState('')
+  // PCM chunks that arrive before the worker confirms its upstream STT
+  // session is open. We buffer here rather than sending early — early
+  // chunks would fall through the worker's PTT path and Scribe v1 rejects
+  // raw PCM as "audio file corrupted". Drained on `live_started`. Capped
+  // so a stuck handshake can't grow this unboundedly.
+  const liveReadyRef = useRef(false)
+  const pendingChunksRef = useRef<ArrayBuffer[]>([])
+  const PENDING_CHUNK_CAP = 50 // ~5s of 100ms PCM
 
   // Virtualized chat list. `atBottom` gates whether streaming/new messages
   // pull the viewport down — if the user scrolled up to read older turns
@@ -116,6 +132,7 @@ export default function App({ user, signOut }: AppProps) {
           scrollToBottom()
         } else if (msg.type === 'transcript') {
           setHistory((h) => [...h, { role: 'user', text: msg.text }])
+          setLiveCaption('')
           setStatus('thinking')
         } else if (msg.type === 'response_text') {
           partialRef.current += msg.delta
@@ -184,6 +201,29 @@ export default function App({ user, signOut }: AppProps) {
           setTimerActive(false)
           // Quest failed — show message to user
           console.log('[client] Quest failed:', msg.reason)
+        } else if (msg.type === 'transcript_partial') {
+          // Live-mode interim transcript. stopActivePlayback() is a no-op
+          // when nothing is playing, so unconditional call doubles as
+          // barge-in for the speaking case.
+          setLiveCaption(msg.text)
+          stopActivePlayback()
+        } else if (msg.type === 'live_started') {
+          // Upstream STT is ready. Drain any PCM chunks that piled up
+          // during the handshake gap, then start sending directly.
+          const ws = wsRef.current
+          if (ws && ws.readyState === WebSocket.OPEN) {
+            for (const chunk of pendingChunksRef.current) ws.send(chunk)
+          }
+          pendingChunksRef.current = []
+          liveReadyRef.current = true
+          setLiveStarting(false)
+          setLiveActive(true)
+        } else if (msg.type === 'live_closed') {
+          liveReadyRef.current = false
+          pendingChunksRef.current = []
+          setLiveStarting(false)
+          setLiveActive(false)
+          setLiveCaption('')
         } else if (msg.type === 'error') {
           setError(msg.message)
           setStatus('idle')
@@ -242,8 +282,24 @@ export default function App({ user, signOut }: AppProps) {
         ws.onerror = null
         ws.close()
       }
+      // Release mic if user navigates away mid-call.
+      liveRecorderRef.current.stop()
     }
   }, [])
+
+  // Drop out of live mode when the WS reconnects — the worker side is per
+  // connection, so the upstream STT session is gone and the client's
+  // liveActive flag is now stale.
+  useEffect(() => {
+    if (status === 'reconnecting' || status === 'connecting') {
+      if (liveActive || liveStarting) {
+        liveRecorderRef.current.stop()
+        setLiveActive(false)
+        setLiveStarting(false)
+        setLiveCaption('')
+      }
+    }
+  }, [status, liveActive, liveStarting])
 
   const startTalk = async () => {
     setError(null)
@@ -275,6 +331,53 @@ export default function App({ user, signOut }: AppProps) {
       return
     }
     wsRef.current?.send(await blob.arrayBuffer())
+  }
+
+  const enterLive = async () => {
+    if (liveActive || liveStarting) return
+    setError(null)
+    // Must be SYNC, before any await — iOS forgets the gesture otherwise.
+    unlockAudioPlayback()
+    setLiveStarting(true)
+    liveReadyRef.current = false
+    pendingChunksRef.current = []
+    try {
+      // Mic acquisition must happen inside the user gesture (iOS). The
+      // worklet starts emitting PCM immediately; until the worker confirms
+      // `live_started`, we hold those chunks in pendingChunksRef.
+      await liveRecorderRef.current.start((chunk) => {
+        const ws = wsRef.current
+        if (!ws || ws.readyState !== WebSocket.OPEN) return
+        if (!liveReadyRef.current) {
+          const queue = pendingChunksRef.current
+          queue.push(chunk)
+          if (queue.length > PENDING_CHUNK_CAP) queue.shift()
+          return
+        }
+        ws.send(chunk)
+      })
+      // Tell the worker to open its upstream STT session. live_started or
+      // an error will follow on the WS.
+      wsRef.current?.send(JSON.stringify({ type: 'live_start' }))
+    } catch (err) {
+      setLiveStarting(false)
+      liveRecorderRef.current.stop()
+      pendingChunksRef.current = []
+      setError(err instanceof Error ? err.message : 'Mic access denied')
+    }
+  }
+
+  const exitLive = () => {
+    if (!liveActive && !liveStarting) return
+    liveRecorderRef.current.stop()
+    wsRef.current?.send(JSON.stringify({ type: 'live_stop' }))
+    setLiveCaption('')
+    liveReadyRef.current = false
+    pendingChunksRef.current = []
+    // live_closed from worker will flip liveActive/liveStarting; flip them
+    // optimistically too so the button updates immediately.
+    setLiveActive(false)
+    setLiveStarting(false)
   }
 
   // Display items: persisted turns plus the in-flight assistant partial as a
@@ -326,12 +429,14 @@ export default function App({ user, signOut }: AppProps) {
 
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
+      if (liveActive) return
       if (e.code === 'Space' && !e.repeat && (status === 'idle' || status === 'speaking')) {
         e.preventDefault()
         startTalk()
       }
     }
     const onKeyUp = (e: KeyboardEvent) => {
+      if (liveActive) return
       if (e.code === 'Space' && status === 'listening') {
         e.preventDefault()
         stopTalk()
@@ -343,7 +448,7 @@ export default function App({ user, signOut }: AppProps) {
       window.removeEventListener('keydown', onKeyDown)
       window.removeEventListener('keyup', onKeyUp)
     }
-  }, [status])
+  }, [status, liveActive])
 
   return (
     <main className="app">
@@ -595,22 +700,49 @@ export default function App({ user, signOut }: AppProps) {
       </div>
 
       <footer>
+        {liveActive && liveCaption && (
+          <div className="live-caption" aria-live="polite">{liveCaption}</div>
+        )}
+        {liveActive ? (
+          <button
+            className="mic mic-live"
+            onClick={exitLive}
+            title="End the live call (mic stays open while on)"
+          >
+            end call
+          </button>
+        ) : (
+          <button
+            className={`mic mic-${status}`}
+            onMouseDown={startTalk}
+            onMouseUp={stopTalk}
+            onMouseLeave={() => status === 'listening' && stopTalk()}
+            onTouchStart={startTalk}
+            onTouchEnd={stopTalk}
+            disabled={status !== 'idle' && status !== 'listening' && status !== 'speaking'}
+          >
+            {status === 'connecting' && 'connecting…'}
+            {status === 'reconnecting' && 'reconnecting…'}
+            {status === 'idle' && 'hold to talk'}
+            {status === 'listening' && 'listening…'}
+            {status === 'thinking' && 'thinking…'}
+            {status === 'speaking' && 'speaking…'}
+            {status === 'error' && 'disconnected'}
+          </button>
+        )}
         <button
-          className={`mic mic-${status}`}
-          onMouseDown={startTalk}
-          onMouseUp={stopTalk}
-          onMouseLeave={() => status === 'listening' && stopTalk()}
-          onTouchStart={startTalk}
-          onTouchEnd={stopTalk}
-          disabled={status !== 'idle' && status !== 'listening' && status !== 'speaking'}
+          className={`live-toggle${liveActive ? ' live-toggle-on' : ''}`}
+          onClick={liveActive ? exitLive : enterLive}
+          disabled={
+            liveStarting ||
+            status === 'connecting' ||
+            status === 'reconnecting' ||
+            status === 'error' ||
+            (!liveActive && status !== 'idle' && status !== 'speaking')
+          }
+          title={liveActive ? 'Stop live call' : 'Start live call (continuous mic, server VAD)'}
         >
-          {status === 'connecting' && 'connecting…'}
-          {status === 'reconnecting' && 'reconnecting…'}
-          {status === 'idle' && 'hold to talk'}
-          {status === 'listening' && 'listening…'}
-          {status === 'thinking' && 'thinking…'}
-          {status === 'speaking' && 'speaking…'}
-          {status === 'error' && 'disconnected'}
+          {liveStarting ? 'starting…' : liveActive ? 'live ●' : 'go live'}
         </button>
         <button className="reset" onClick={reset} disabled={history.length === 0}>
           new chat

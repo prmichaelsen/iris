@@ -2,6 +2,24 @@
 
 All notable changes to Iris are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versioning follows [SemVer](https://semver.org/).
 
+## [0.11.0] - 2026-05-06
+
+### Added
+- **Live mode ("voice call" UX)** — opt-in continuous-mic alternative to hold-to-talk. The mic stays open, ElevenLabs Scribe v2 Realtime endpoints utterances server-side via VAD, partial transcripts stream back as live captions, and barge-in fires the moment the user starts speaking (playback stops on the first `partial_transcript`). PTT remains the default; a "go live" / "live ●" / "end call" toggle in the footer flips between modes.
+  - **Worker**: new `worker/realtime-stt.ts` opens an outbound WebSocket to `https://api.elevenlabs.io/v1/speech-to-text/realtime` via `fetch()` with `Upgrade: websocket` and an `xi-api-key` header. Configured for `commit_strategy=vad` and `audio_format=pcm_16000` so endpointing happens upstream. Auth stays server-side — no token leaks to the client.
+  - **Worker**: extracted the post-transcript pipeline into `runTurn(transcript)` so PTT (Scribe v1 file) and live mode (Scribe v2 streaming) share the same Claude tool-loop, persistence, vocab pick, session-state refresh, and TTS path. New `live_start` / `live_stop` control messages on the existing voice WS; binary frames route to the live STT session when active and to the PTT path otherwise. Live turns serialize through a chained promise so concurrent commits don't interleave.
+  - **Client**: `LiveRecorder` (in `client/audio.ts`) wraps `AudioContext` + an AudioWorklet at `client/pcm-capture-worklet.js` that downsamples Float32 mic input to 16 kHz Int16 LE in ~100 ms chunks. `getUserMedia` requests `echoCancellation` / `noiseSuppression` / `autoGainControl` to keep the assistant's TTS from feeding back into Scribe and false-triggering VAD commits.
+  - **Client**: PCM chunks are buffered in a ref-held queue during the upstream-handshake gap (capped at 50 chunks ≈ 5 s) and drained on `live_started`. Without this, early frames fall through the worker's PTT path and Scribe v1 rejects them as "audio file corrupted". Worker also drops binary frames during its own `liveStarting` window as belt-and-braces.
+  - **Client**: WS reconnect drops the user out of live mode (worker side state is per-connection); spacebar PTT shortcut suppressed while live; partial transcripts render as a footer caption, cleared on commit.
+
+### Added (docs)
+- `agent/internal/tool-call-leaks-into-tts.md` — bug tracker for tool-use JSON occasionally being read aloud by TTS; documents the three `streamTTS` call sites and a layered prompt + defensive-guard fix.
+- `agent/internal/word-pronunciation-helper.md` — feature spec for click-a-word-to-hear-it pronunciation (~half a day; reuses `streamTTS`, `playBlob`, the existing word popover; cache audio per `(word, voice, lang)`).
+
+### Notes
+- Cloudflare Workers' `fetch()` requires `https://` (not `wss://`) for outbound WebSocket upgrades — the wss:// form throws "fetch API cannot load wss://...". Encoded as a comment in `worker/realtime-stt.ts` so the next person who edits the file doesn't repeat the mistake.
+- Open follow-ups: real upstream TTS cancellation needs `streamTTS` to take an `AbortSignal` (today the worker keeps streaming chunks after barge-in — bandwidth waste, not broken); echo-loop tuning in `realtime-stt.ts` if AEC turns out to leak the assistant's voice into Scribe.
+
 ## [0.10.0] - 2026-04-27
 
 ### Added

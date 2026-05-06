@@ -32,6 +32,7 @@ import {
 import { updateSessionCharacterState } from './session-state'
 import { buildSystemPrompt as injectorsBuildSystemPrompt } from './prompt-injectors'
 import { lookupWord } from './word-lookup'
+import { openRealtimeSTT, type RealtimeSTTHandle } from './realtime-stt'
 
 const ELEVEN_API = 'https://api.elevenlabs.io/v1'
 const MODEL = 'claude-opus-4-7'
@@ -51,7 +52,7 @@ Gamification tools (use proactively):
 - When the user asks about quests, places to visit, or wants to practice with a character, use the \`quests\` or \`regions\` tools.
 - \`regions\` tool with action="list" shows all German regions and which are unlocked.
 - \`quests\` tool with action="list" shows available quests. Pass region_id="berlin" to filter.
-- \`quests\` tool with action="activate" starts a quest (switches you into that character's voice and personality).
+- \`quests\` tool with action="activate" starts a quest (switches you into that character's voice and personality). After activate succeeds, immediately speak AS the character on the next response — do NOT narrate the switch, do NOT say "there was an error", do NOT describe the scene in third person. Just BE the character.
 - When the user says something like "Hast du eine Quest für mich mit Karl?" or "Can I talk to Karl?", call \`quests\` action=list region_id=berlin to find Karl's quests, then describe them.
 - Karl der Bäcker (Berlin baker) offers the "Erste Bestellung" quest — a time-pressured ordering challenge.
 - Mila (Berlin street artist) can be unlocked by completing Tier 2 Berlin quests.
@@ -472,6 +473,214 @@ async function handleWebSocket(request: Request, env: Env): Promise<Response> {
     }
   }
 
+  // Shared turn pipeline: takes a finalized user transcript and runs the
+  // Claude tool-loop, persists messages, streams TTS, and emits done.
+  // Used by both PTT (after Scribe transcribes the held blob) and live mode
+  // (on each committed_transcript from Scribe v2 Realtime).
+  const runTurn = async (transcript: string): Promise<void> => {
+    send({ type: 'transcript', text: transcript })
+    history.push({ role: 'user', content: transcript })
+    await persistMessage(env.DB, conversationId, 'user', transcript, 'user')
+
+    recordUserResponse(conversationId)
+
+    if (characterUsesTimer(activeCharacterId)) {
+      send({ type: 'timer_stop' })
+    }
+
+    const vocab = targetLang
+      ? await pickVocab(env.DB, userId, targetLang.code, 5)
+      : []
+
+    const tools = getTools(targetLang)
+    let fullAssistantText = ''
+    const turnWidgetBlocks: WidgetContentBlock[] = []
+
+    for (let iteration = 0; iteration < MAX_TOOL_ITERATIONS; iteration++) {
+      let iterationText = ''
+      const stream = anthropic.messages.stream({
+        model: MODEL,
+        max_tokens: 1024,
+        system: await buildSystemPromptAsync(targetLang, vocab, activeCharacter, env.DB, userId, activeCharacterId, activeQuest || undefined, currentRegion),
+        messages: sanitizeToolMessages(history),
+        ...(tools.length > 0 ? { tools } : {}),
+      })
+
+      stream.on('error', (err) => {
+        console.error('[iris] stream error (tool-loop path):', err)
+      })
+      stream.on('text', (delta) => {
+        iterationText += delta
+        fullAssistantText += delta
+        send({ type: 'response_text', delta })
+      })
+
+      const finalMessage = await stream.finalMessage()
+
+      const textBlocks = finalMessage.content
+        .filter((b): b is Anthropic.TextBlock => b.type === 'text')
+        .map((b) => b.text)
+        .join('')
+      if (textBlocks && !iterationText) {
+        fullAssistantText += textBlocks
+      }
+
+      const toolUseBlocks = finalMessage.content.filter(
+        (b): b is Anthropic.ToolUseBlock => b.type === 'tool_use',
+      )
+
+      if (finalMessage.stop_reason !== 'tool_use' || toolUseBlocks.length === 0) {
+        break
+      }
+
+      history.push({ role: 'assistant', content: finalMessage.content })
+
+      const toolResults: Anthropic.ToolResultBlockParam[] = []
+      for (const block of toolUseBlocks) {
+        const result = await executeToolCall(
+          block.name,
+          block.input as Record<string, unknown>,
+          { env, userId, server, send, targetLang, turnWidgetBlocks, pendingWidget, conversationHistory: history },
+        )
+        toolResults.push({
+          type: 'tool_result',
+          tool_use_id: block.id,
+          content: result,
+        })
+      }
+
+      history.push({ role: 'user', content: toolResults })
+
+      const refreshed = await env.DB
+        .prepare(
+          'SELECT active_character, active_quest, current_region, active_voice_id FROM sessions WHERE user_id = ? ORDER BY created_at DESC LIMIT 1',
+        )
+        .bind(userId)
+        .first<{
+          active_character: string | null
+          active_quest: string | null
+          current_region: string | null
+          active_voice_id: string | null
+        }>()
+
+      if (refreshed) {
+        const nextCharacterId = refreshed.active_character || 'iris'
+        const nextQuest = refreshed.active_quest
+        const nextRegion = refreshed.current_region || currentRegion
+
+        if (nextQuest && nextQuest !== activeQuest) {
+          resetStrikes(conversationId)
+        }
+        if (!nextQuest && activeQuest) {
+          clearConversationState(conversationId)
+          getOrCreateConversationState(conversationId, nextCharacterId, undefined)
+        }
+
+        if (nextCharacterId !== activeCharacterId) {
+          const nextCharacter = getCharacter(nextCharacterId) || getCharacter('iris')!
+          activeCharacter = nextCharacter
+          activeCharacterId = nextCharacterId
+          activeVoiceId = refreshed.active_voice_id || nextCharacter.voice_id
+        } else if (refreshed.active_voice_id && refreshed.active_voice_id !== activeVoiceId) {
+          activeVoiceId = refreshed.active_voice_id
+        }
+        activeQuest = nextQuest
+        currentRegion = nextRegion
+      }
+    }
+
+    if (fullAssistantText.trim() || turnWidgetBlocks.length > 0) {
+      const blocks: ContentBlock[] = []
+      if (fullAssistantText.trim()) {
+        blocks.push({ type: 'text', text: fullAssistantText })
+      }
+      blocks.push(...turnWidgetBlocks)
+
+      history.push({ role: 'assistant', content: fullAssistantText || '(widget interaction)' })
+      await persistMessage(
+        env.DB,
+        conversationId,
+        'assistant',
+        turnWidgetBlocks.length > 0 ? blocks : fullAssistantText,
+        activeCharacterId,
+      )
+    }
+
+    if (fullAssistantText.trim()) {
+      await streamTTS(fullAssistantText, server, env, activeVoiceId)
+    }
+
+    if (characterUsesTimer(activeCharacterId)) {
+      send({ type: 'timer_start' })
+    }
+
+    if (vocab.length > 0) {
+      await markVocabSeen(env.DB, userId, vocab).catch((err) =>
+        console.warn('[iris] markVocabSeen failed:', err),
+      )
+    }
+
+    send({ type: 'done' })
+  }
+
+  // Live mode (Scribe v2 Realtime). When active, the client streams 16 kHz
+  // Int16 LE PCM frames over the existing WS, the worker forwards them to
+  // ElevenLabs, and each committed_transcript triggers runTurn.
+  //
+  // Turns are serialized: while one runTurn is streaming TTS back, any
+  // committed transcripts that arrive queue up rather than interleaving.
+  // Barge-in is driven from the client — partial_transcript events stop
+  // the current playback there. (Aborting in-flight TTS upstream would
+  // need a refactor of streamTTS to support cancellation; deferred.)
+  let liveSTT: RealtimeSTTHandle | null = null
+  let liveStarting = false
+  let liveTurnChain: Promise<void> = Promise.resolve()
+
+  const stopLive = () => {
+    if (!liveSTT) return
+    liveSTT.close()
+    liveSTT = null
+  }
+
+  const startLive = async () => {
+    stopLive()
+    liveStarting = true
+    try {
+      liveSTT = await openRealtimeSTT({
+        env,
+        language: nextLanguage,
+        onPartial: (text) => send({ type: 'transcript_partial', text }),
+        onCommitted: (text) => {
+          liveTurnChain = liveTurnChain
+            .then(() => runTurn(text))
+            .catch((err) => {
+              console.error('[iris] live turn failed:', err)
+              send({
+                type: 'error',
+                message: err instanceof Error ? err.message : String(err),
+              })
+              send({ type: 'done' })
+            })
+        },
+        onError: (msg) => send({ type: 'error', message: msg }),
+        onClose: () => {
+          liveSTT = null
+          send({ type: 'live_closed' })
+        },
+      })
+      send({ type: 'live_started' })
+    } catch (err) {
+      console.error('[iris] live start failed:', err)
+      send({
+        type: 'error',
+        message: err instanceof Error ? err.message : String(err),
+      })
+      send({ type: 'live_closed' })
+    } finally {
+      liveStarting = false
+    }
+  }
+
   server.addEventListener('message', async (event: MessageEvent) => {
     const data = event.data
 
@@ -624,6 +833,17 @@ async function handleWebSocket(request: Request, env: Env): Promise<Response> {
               .bind(msg.code, msg.name, msg.english, userId)
               .run()
           }
+          // Switching languages mid-call requires a new STT session — its
+          // language_code is fixed at connection time.
+          if (liveSTT) {
+            stopLive()
+            await startLive()
+          }
+        } else if (msg.type === 'live_start') {
+          await startLive()
+        } else if (msg.type === 'live_stop') {
+          stopLive()
+          send({ type: 'live_closed' })
         }
       } catch {}
       return
@@ -642,177 +862,30 @@ async function handleWebSocket(request: Request, env: Env): Promise<Response> {
         console.warn(`[iris] unexpected message data type: ${typeof data}`)
         return
       }
-      const audio = new Uint8Array(buf)
 
+      // Live mode: stream PCM up to ElevenLabs, transcripts come back via
+      // the onPartial / onCommitted callbacks above.
+      if (liveSTT) {
+        liveSTT.sendPCM(buf)
+        return
+      }
+      // Handshake in progress: drop incoming PCM rather than letting it
+      // fall through to Scribe v1's file endpoint, which would reject raw
+      // PCM as a corrupt file. The client buffers chunks during this window
+      // and resends after `live_started` arrives.
+      if (liveStarting) {
+        return
+      }
+
+      // PTT path: one complete blob = one turn.
+      const audio = new Uint8Array(buf)
       const transcript = await transcribe(audio, nextLanguage, env)
       if (!transcript.trim()) {
         send({ type: 'error', message: 'No speech detected' })
         send({ type: 'done' })
         return
       }
-      send({ type: 'transcript', text: transcript })
-      history.push({ role: 'user', content: transcript })
-      await persistMessage(env.DB, conversationId, 'user', transcript, 'user')
-
-      // Record user response timestamp (reset timer, strikes NOT reset per quest rules)
-      recordUserResponse(conversationId)
-
-      // Stop timer on user response
-      if (characterUsesTimer(activeCharacterId)) {
-        send({ type: 'timer_stop' })
-      }
-
-      // Pick vocabulary cards for this turn — injected into the system prompt
-      const vocab = targetLang
-        ? await pickVocab(env.DB, userId, targetLang.code, 5)
-        : []
-
-      const tools = getTools(targetLang)
-      let fullAssistantText = ''
-      const turnWidgetBlocks: WidgetContentBlock[] = []
-
-      // Tool-use loop: stream Claude, execute any tool calls, feed results back
-      for (let iteration = 0; iteration < MAX_TOOL_ITERATIONS; iteration++) {
-        let iterationText = ''
-        const stream = anthropic.messages.stream({
-          model: MODEL,
-          max_tokens: 1024,
-          system: await buildSystemPromptAsync(targetLang, vocab, activeCharacter, env.DB, userId, activeCharacterId, activeQuest || undefined, currentRegion),
-          messages: sanitizeToolMessages(history),
-          ...(tools.length > 0 ? { tools } : {}),
-        })
-
-        stream.on('error', (err) => {
-          console.error('[iris] stream error (tool-loop path):', err)
-        })
-        stream.on('text', (delta) => {
-          iterationText += delta
-          fullAssistantText += delta
-          send({ type: 'response_text', delta })
-        })
-
-        const finalMessage = await stream.finalMessage()
-
-        // Collect text from the response
-        const textBlocks = finalMessage.content
-          .filter((b): b is Anthropic.TextBlock => b.type === 'text')
-          .map((b) => b.text)
-          .join('')
-        if (textBlocks && !iterationText) {
-          fullAssistantText += textBlocks
-        }
-
-        // Check for tool calls
-        const toolUseBlocks = finalMessage.content.filter(
-          (b): b is Anthropic.ToolUseBlock => b.type === 'tool_use',
-        )
-
-        if (finalMessage.stop_reason !== 'tool_use' || toolUseBlocks.length === 0) {
-          // No tool calls — normal end of turn
-          break
-        }
-
-        // Append the assistant's response (with tool_use blocks) to history
-        history.push({ role: 'assistant', content: finalMessage.content })
-
-        // Execute each tool call and collect results
-        const toolResults: Anthropic.ToolResultBlockParam[] = []
-        for (const block of toolUseBlocks) {
-          const result = await executeToolCall(
-            block.name,
-            block.input as Record<string, unknown>,
-            { env, userId, server, send, targetLang, turnWidgetBlocks, pendingWidget, conversationHistory: history },
-          )
-          toolResults.push({
-            type: 'tool_result',
-            tool_use_id: block.id,
-            content: result,
-          })
-        }
-
-        // Feed tool results back as a user message
-        history.push({ role: 'user', content: toolResults })
-
-        // Refresh session state in case a tool (quests.activate / quests.complete /
-        // regions.travel) mutated it. Keeps local closure vars in sync with DB,
-        // and handles 3-strike lifecycle per spec.
-        const refreshed = await env.DB
-          .prepare(
-            'SELECT active_character, active_quest, current_region, active_voice_id FROM sessions WHERE user_id = ? ORDER BY created_at DESC LIMIT 1',
-          )
-          .bind(userId)
-          .first<{
-            active_character: string | null
-            active_quest: string | null
-            current_region: string | null
-            active_voice_id: string | null
-          }>()
-
-        if (refreshed) {
-          const nextCharacterId = refreshed.active_character || 'iris'
-          const nextQuest = refreshed.active_quest
-          const nextRegion = refreshed.current_region || currentRegion
-
-          // Quest activated (new quest started) — reset strikes per spec R15a
-          if (nextQuest && nextQuest !== activeQuest) {
-            resetStrikes(conversationId)
-          }
-          // Quest completed (no longer active) — clear per-conversation state
-          if (!nextQuest && activeQuest) {
-            clearConversationState(conversationId)
-            // Recreate a fresh conversation-state entry for the returning-to-Iris context
-            getOrCreateConversationState(conversationId, nextCharacterId, undefined)
-          }
-
-          if (nextCharacterId !== activeCharacterId) {
-            const nextCharacter = getCharacter(nextCharacterId) || getCharacter('iris')!
-            activeCharacter = nextCharacter
-            activeCharacterId = nextCharacterId
-            activeVoiceId = refreshed.active_voice_id || nextCharacter.voice_id
-          } else if (refreshed.active_voice_id && refreshed.active_voice_id !== activeVoiceId) {
-            activeVoiceId = refreshed.active_voice_id
-          }
-          activeQuest = nextQuest
-          currentRegion = nextRegion
-        }
-      }
-
-      // Persist the assistant turn — as content blocks if widgets were involved
-      if (fullAssistantText.trim() || turnWidgetBlocks.length > 0) {
-        const blocks: ContentBlock[] = []
-        if (fullAssistantText.trim()) {
-          blocks.push({ type: 'text', text: fullAssistantText })
-        }
-        blocks.push(...turnWidgetBlocks)
-
-        history.push({ role: 'assistant', content: fullAssistantText || '(widget interaction)' })
-        await persistMessage(
-          env.DB,
-          conversationId,
-          'assistant',
-          turnWidgetBlocks.length > 0 ? blocks : fullAssistantText,
-          activeCharacterId,
-        )
-      }
-
-      // TTS the text response (skip if the turn was pure tool calls with no text)
-      if (fullAssistantText.trim()) {
-        await streamTTS(fullAssistantText, server, env, activeVoiceId)
-      }
-
-      // If this character uses timer pressure, signal client to start countdown
-      if (characterUsesTimer(activeCharacterId)) {
-        send({ type: 'timer_start' })
-      }
-
-      // Mark vocab as seen
-      if (vocab.length > 0) {
-        await markVocabSeen(env.DB, userId, vocab).catch((err) =>
-          console.warn('[iris] markVocabSeen failed:', err),
-        )
-      }
-
-      send({ type: 'done' })
+      await runTurn(transcript)
     } catch (err) {
       console.error('[iris] turn failed:', err)
       send({
@@ -824,6 +897,7 @@ async function handleWebSocket(request: Request, env: Env): Promise<Response> {
   })
 
   server.addEventListener('close', () => {
+    stopLive()
     console.log('[iris] client disconnected')
   })
 

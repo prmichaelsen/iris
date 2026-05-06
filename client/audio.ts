@@ -83,6 +83,73 @@ export class Recorder {
   }
 }
 
+// ---- Live mode capture (AudioWorklet → 16 kHz Int16 PCM chunks) ----
+
+// Vite resolves this to a hashed URL at build time and serves the .js
+// untransformed, which is what AudioWorklet.addModule expects.
+const PCM_CAPTURE_WORKLET_URL = new URL(
+  './pcm-capture-worklet.js',
+  import.meta.url,
+).href
+
+let workletLoaded: Promise<void> | null = null
+async function ensurePCMCaptureWorklet(ac: AudioContext): Promise<void> {
+  if (!workletLoaded) {
+    workletLoaded = ac.audioWorklet.addModule(PCM_CAPTURE_WORKLET_URL)
+  }
+  return workletLoaded
+}
+
+// Continuous mic capture for "voice call" mode. Streams 16 kHz Int16 LE PCM
+// chunks (~100 ms each) via the onChunk callback. Caller forwards them to
+// the worker over WS; ElevenLabs Scribe v2 Realtime endpoints utterances
+// server-side and emits committed transcripts.
+export class LiveRecorder {
+  private ctx: AudioContext | null = null
+  private stream: MediaStream | null = null
+  private source: MediaStreamAudioSourceNode | null = null
+  private node: AudioWorkletNode | null = null
+
+  async start(onChunk: (pcm: ArrayBuffer) => void): Promise<void> {
+    const ac = ctx()
+    if (ac.state === 'suspended') {
+      try { await ac.resume() } catch {}
+    }
+    await ensurePCMCaptureWorklet(ac)
+
+    // AEC/NS/AGC matter here: the mic stays open while Iris is speaking
+    // through the same speakers. The browser's echo cancellation is what
+    // keeps Iris's voice from feeding back into Scribe and false-triggering
+    // VAD commits.
+    this.stream = await navigator.mediaDevices.getUserMedia({
+      audio: {
+        echoCancellation: true,
+        noiseSuppression: true,
+        autoGainControl: true,
+      },
+    })
+    this.source = ac.createMediaStreamSource(this.stream)
+    this.node = new AudioWorkletNode(ac, 'pcm-capture')
+    this.node.port.onmessage = (e: MessageEvent<ArrayBuffer>) => onChunk(e.data)
+    this.source.connect(this.node)
+    // Intentionally NOT connecting node → destination. The processor emits
+    // no audio (only postMessage); a destination connection would just route
+    // silence and create a feedback path on some browsers.
+    this.ctx = ac
+  }
+
+  stop(): void {
+    try { this.source?.disconnect() } catch {}
+    try { this.node?.disconnect() } catch {}
+    if (this.node) this.node.port.onmessage = null
+    this.node = null
+    this.source = null
+    this.stream?.getTracks().forEach((t) => t.stop())
+    this.stream = null
+    // Leave the shared AudioContext alive for playback.
+  }
+}
+
 function pickMimeType(): string | null {
   // mp4/AAC works in both MediaRecorder AND decodeAudioData on iOS WebKit.
   // iOS lies about webm/opus support: encoder works but decoder rejects the

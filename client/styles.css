@@ -219,6 +219,44 @@ footer {
   cursor: not-allowed;
 }
 
+.mic-live {
+  background: #b94a3a;
+  border-color: #b94a3a;
+  animation: pulse 1.2s ease-in-out infinite;
+}
+
+.live-toggle {
+  padding: 0.75rem 1rem;
+  font-size: 0.9rem;
+  font-family: inherit;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--fg);
+  cursor: pointer;
+}
+
+.live-toggle:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.live-toggle-on {
+  background: #b94a3a;
+  border-color: #b94a3a;
+  color: white;
+}
+
+.live-caption {
+  flex-basis: 100%;
+  text-align: center;
+  font-size: 0.95rem;
+  color: var(--muted);
+  font-style: italic;
+  padding: 0.25rem 0.75rem;
+  margin-bottom: 0.25rem;
+}
+
 .lang-bar {
   display: flex;
   align-items: center;
